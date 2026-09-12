@@ -1,0 +1,39 @@
+.loaderWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  gap: 1rem;
+}
+
+.loaderRing {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: conic-gradient(#7c5cff 0deg, #7c5cff 230deg, rgba(255,255,255,0.1) 230deg 360deg);
+  display: grid;
+  place-items: center;
+  animation: spin 1.1s linear infinite;
+}
+
+.loaderCore {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #0b1020;
+  box-shadow: inset 0 0 18px rgba(124, 92, 255, 0.55);
+}
+
+.loaderText {
+  color: rgba(237, 242, 255, 0.7);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

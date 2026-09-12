@@ -1,0 +1,11 @@
+export const CURRENCY_TYPES = {
+  VELOOP: 'VELOOP',
+  SVE: 'SVE',
+  TOKEN: 'TOKEN'
+};
+
+export const GIVEAWAY_RULES = {
+  MAX_ENTRIES_PER_USER: 1,
+  CLAIM_WINDOW_DAYS: 7,
+  MINIMUM_VERIFICATION_LEVEL: 'verified'
+};
