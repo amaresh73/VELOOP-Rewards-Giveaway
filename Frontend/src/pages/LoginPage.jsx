@@ -53,7 +53,7 @@ function LoginPage() {
       }
     } catch (err) {
       const serverMessage = err.response?.data?.message 
-        || (err.code === 'ERR_NETWORK' ? 'Unable to connect to the backend server. Please make sure the backend is running on port 5000.' : err.message)
+        || (err.code === 'ERR_NETWORK' ? 'Unable to reach the server. Please try again in a moment.' : err.message)
         || 'Invalid email or password.';
       setError(serverMessage);
     } finally {
