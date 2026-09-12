@@ -22,23 +22,42 @@ const allowedOrigins = new Set([
   ...(process.env.CORS_ORIGINS || process.env.CLIENT_URL || '').split(',').map((origin) => origin.trim()).filter(Boolean)
 ]);
 
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+
+  // Local development on any port (localhost, 127.0.0.1, LAN private IPs)
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+    return true;
+  }
+
+  // Allow all Vercel deployments (*.vercel.app)
+  try {
+    const { hostname } = new URL(origin);
+    if (hostname === 'vercel.app' || hostname.endsWith('.vercel.app')) {
+      return true;
+    }
+    if (hostname === 'railway.app' || hostname.endsWith('.railway.app')) {
+      return true;
+    }
+  } catch {
+    // Ignore URL parse error
+  }
+
+  // Check explicitly allowed origins from environment (or wildcard '*')
+  if (allowedOrigins.has(origin) || allowedOrigins.has('*')) {
+    return true;
+  }
+
+  return false;
+};
+
 app.disable('x-powered-by');
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Allow localhost, 127.0.0.1, and 192.168.* for local development on any port
-    if (/^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
-    
-    // Check explicitly allowed origins from environment
-    if (allowedOrigins.has(origin)) {
-      return callback(null, true);
-    }
-
     return callback(new Error(`CORS origin not allowed: ${origin}`));
   },
   credentials: true
