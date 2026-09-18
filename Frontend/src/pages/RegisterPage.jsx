@@ -1,33 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Form, Button, Alert, Container, InputGroup, Badge, Nav } from 'react-bootstrap';
+import { Form, Button, Alert, Container } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import GoogleAuthModal, { GoogleIcon } from '../components/Common/GoogleAuthModal';
 
 function RegisterPage() {
   const navigate = useNavigate();
-  const { register, sendOtp, verifyRegistrationOtp, resendVerification, googleAuth } = useAuth();
-
-  // Registration Mode: 'phone' (Mobile Number with OTP) or 'email' (Email Verification Link)
-  const [activeTab, setActiveTab] = useState('phone');
+  const { register, resendVerification, googleAuth } = useAuth();
 
   // Form fields
   const [formData, setFormData] = useState({
     name: '',
-    phone: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: ''
   });
-
-  // Mobile OTP state
-  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
-  const [phoneOtpCode, setPhoneOtpCode] = useState('');
-  const [phoneVerified, setPhoneVerified] = useState(false);
-  const [phoneSendingOtp, setPhoneSendingOtp] = useState(false);
-  const [phoneVerifyingOtp, setPhoneVerifyingOtp] = useState(false);
-  const [phoneOtpTimer, setPhoneOtpTimer] = useState(0);
-  const [phoneOtpInfo, setPhoneOtpInfo] = useState('');
 
   // Email verification confirmation screen state
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
@@ -45,17 +33,6 @@ function RegisterPage() {
   const [error, setError] = useState('');
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  // Phone OTP countdown timer
-  useEffect(() => {
-    let interval = null;
-    if (phoneOtpTimer > 0) {
-      interval = setInterval(() => setPhoneOtpTimer((prev) => prev - 1), 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [phoneOtpTimer]);
 
   // Email resend countdown timer
   useEffect(() => {
@@ -82,72 +59,10 @@ function RegisterPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
     setError('');
     setAlreadyRegistered(false);
-
-    // If phone number changes after OTP sent/verified, reset verification
-    if (name === 'phone' && (phoneOtpSent || phoneVerified)) {
-      setPhoneOtpSent(false);
-      setPhoneVerified(false);
-      setPhoneOtpCode('');
-      setPhoneOtpInfo('');
-    }
-  };
-
-  // Trigger Send OTP for Mobile Phone
-  const handleSendPhoneOtp = async () => {
-    setError('');
-    setPhoneOtpInfo('');
-    setAlreadyRegistered(false);
-
-    const rawPhone = formData.phone.trim();
-    if (!rawPhone || !isValidPhone(rawPhone)) {
-      setError('Please enter a valid 10-digit mobile phone number (e.g. 9876543210 or +91 98765 43210).');
-      return;
-    }
-
-    setPhoneSendingOtp(true);
-    try {
-      const res = await sendOtp(rawPhone);
-      setPhoneOtpSent(true);
-      setPhoneOtpTimer(30);
-      setPhoneOtpCode(''); // Clear OTP input - user must enter the code from their phone SMS
-      setPhoneOtpInfo(res.message || `Verification code sent to ${res.phone || rawPhone}. Please check your phone SMS.`);
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Failed to send OTP to mobile number. Please check the number and try again.';
-      setError(msg);
-    } finally {
-      setPhoneSendingOtp(false);
-    }
-  };
-
-  // Verify Phone OTP Code
-  const handleVerifyPhoneOtp = async () => {
-    setError('');
-    const code = phoneOtpCode.trim();
-
-    if (!code || code.length !== 6) {
-      setError('Please enter the exact 6-digit verification code.');
-      return;
-    }
-
-    setPhoneVerifyingOtp(true);
-    try {
-      await verifyRegistrationOtp({
-        phone: formData.phone.trim(),
-        otp: code
-      });
-      setPhoneVerified(true);
-      setPhoneOtpInfo('Mobile phone number verified successfully! ✓');
-      setError('');
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Invalid or expired OTP code. Please try again.';
-      setError(msg);
-    } finally {
-      setPhoneVerifyingOtp(false);
-    }
   };
 
   const validateForm = () => {
-    const { name, phone, email, password, confirmPassword } = formData;
+    const { name, email, phone, password, confirmPassword } = formData;
 
     if (!name.trim()) {
       return 'Please enter your full name.';
@@ -156,17 +71,12 @@ function RegisterPage() {
       return 'Name must be at least 2 characters long.';
     }
 
-    if (activeTab === 'phone') {
-      if (!phone.trim() || !isValidPhone(phone)) {
-        return 'Please enter a valid mobile phone number.';
-      }
-      if (!phoneVerified) {
-        return 'Please verify your mobile phone number with the 6-digit OTP code before completing registration.';
-      }
-    } else {
-      if (!email.trim() || !isValidEmail(email)) {
-        return 'Please enter a valid email address.';
-      }
+    if (!email.trim() || !isValidEmail(email)) {
+      return 'Please enter a valid email address.';
+    }
+
+    if (phone.trim() && !isValidPhone(phone)) {
+      return 'Please enter a valid 10-digit mobile phone number (e.g. +91 98765 43210).';
     }
 
     if (!password) {
@@ -198,33 +108,16 @@ function RegisterPage() {
     try {
       const payload = {
         name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
         password: formData.password,
         confirmPassword: formData.confirmPassword
       };
 
-      if (activeTab === 'phone') {
+      if (formData.phone && formData.phone.trim()) {
         payload.phone = formData.phone.trim();
-        payload.phoneOtp = phoneOtpCode.trim();
-        if (formData.email && isValidEmail(formData.email)) {
-          payload.email = formData.email.trim().toLowerCase();
-        }
-      } else {
-        payload.email = formData.email.trim().toLowerCase();
-        if (formData.phone && isValidPhone(formData.phone)) {
-          payload.phone = formData.phone.trim();
-          if (phoneVerified) payload.phoneOtp = phoneOtpCode.trim();
-        }
       }
 
       const result = await register(payload);
-
-      // If registered with verified phone: auto-logged in!
-      if (result.phoneVerified) {
-        navigate('/', {
-          state: { message: `Welcome to VELOOP Rewards, ${formData.name}! Your account is now active.` }
-        });
-        return;
-      }
 
       // If registered with email: show check email screen
       setRegisteredEmail(formData.email.trim().toLowerCase());
@@ -236,7 +129,7 @@ function RegisterPage() {
     } catch (err) {
       if (err.response?.status === 409 || err.response?.data?.alreadyRegistered) {
         setAlreadyRegistered(true);
-        setError(err.response?.data?.message || 'An account with this mobile number or email is already registered.');
+        setError(err.response?.data?.message || 'An account with this email address or mobile number is already registered.');
       } else {
         const serverMessage =
           err.response?.data?.message ||
@@ -280,7 +173,7 @@ function RegisterPage() {
   return (
     <div className="auth-shell">
       <Container className="d-flex justify-content-center">
-        <div className="auth-card" style={{ maxWidth: 490, width: '100%' }}>
+        <div className="auth-card" style={{ maxWidth: 480, width: '100%' }}>
 
           {/* VIEW A: Email Verification Sent Confirmation */}
           {emailVerificationSent ? (
@@ -367,13 +260,13 @@ function RegisterPage() {
                     setError('');
                   }}
                 >
-                  ← Sign up with a different option
+                  ← Sign up with a different email
                 </button>
               </div>
             </div>
           ) : (
 
-            /* VIEW B: Registration Form with Mobile OTP & Email Tabs */
+            /* VIEW B: Registration Form (Google + Email Form with Optional Mobile Number, No OTP) */
             <>
               {/* Header */}
               <div className="text-center mb-3">
@@ -397,7 +290,7 @@ function RegisterPage() {
                     <div>
                       <strong className="text-warning d-block">Already Registered</strong>
                       <span className="text-white-50 small">
-                        An account with this mobile number or email already exists.
+                        An account with this email address or mobile number already exists.
                       </span>
                     </div>
                   </div>
@@ -406,7 +299,7 @@ function RegisterPage() {
                       variant="warning"
                       size="sm"
                       className="w-50 fw-bold text-dark"
-                      onClick={() => navigate('/login', { state: { prefilledEmail: formData.phone || formData.email } })}
+                      onClick={() => navigate('/login', { state: { prefilledEmail: formData.email } })}
                     >
                       Log In Instead
                     </Button>
@@ -429,14 +322,7 @@ function RegisterPage() {
                 </Alert>
               )}
 
-              {phoneOtpInfo && (
-                <Alert variant="info" className="py-2 px-3 small d-flex align-items-center gap-2 mb-3">
-                  <span>ℹ️</span>
-                  <div>{phoneOtpInfo}</div>
-                </Alert>
-              )}
-
-              {/* One-Click Sign Up with Google */}
+              {/* Option 1: One-Click Sign Up with Google */}
               <Button
                 variant="light"
                 className="w-100 py-2 d-flex align-items-center justify-content-center gap-2 fw-bold text-dark mb-3 border-0 shadow-sm"
@@ -453,34 +339,16 @@ function RegisterPage() {
                 <span>{googleLoading ? 'Connecting to Google...' : 'Sign up with Google'}</span>
               </Button>
 
-              {/* Tab Selector: Mobile Number (OTP) vs Email */}
-              <div className="bg-dark p-1 rounded-3 mb-3 border border-secondary border-opacity-50 d-flex">
-                <button
-                  type="button"
-                  className={`btn flex-fill py-2 text-center small fw-bold rounded-2 border-0 ${activeTab === 'phone' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
-                    }`}
-                  onClick={() => {
-                    setActiveTab('phone');
-                    setError('');
-                  }}
-                  id="tab-mobile-otp"
-                >
-                  📱 Mobile Number [OTP]
-                </button>
-                <button
-                  type="button"
-                  className={`btn flex-fill py-2 text-center small fw-bold rounded-2 border-0 ${activeTab === 'email' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
-                    }`}
-                  onClick={() => {
-                    setActiveTab('email');
-                    setError('');
-                  }}
-                  id="tab-email"
-                >
-                  ✉️ Email Address
-                </button>
+              {/* Divider */}
+              <div className="d-flex align-items-center my-3 text-white-50 small">
+                <div className="flex-grow-1 border-top border-secondary border-opacity-25" />
+                <span className="px-3 text-uppercase text-white-50 fw-semibold" style={{ fontSize: '0.72rem', letterSpacing: '0.08em' }}>
+                  or register with email
+                </span>
+                <div className="flex-grow-1 border-top border-secondary border-opacity-25" />
               </div>
 
+              {/* Standard Registration Form */}
               <Form onSubmit={handleSubmit}>
                 {/* Field 1: Full Name */}
                 <Form.Group className="mb-3" controlId="register-name">
@@ -500,166 +368,46 @@ function RegisterPage() {
                   />
                 </Form.Group>
 
-                {/* TAB 1: Mobile Phone Registration with OTP Verification */}
-                {activeTab === 'phone' && (
-                  <>
-                    <Form.Group className="mb-3" controlId="register-phone">
-                      <div className="d-flex justify-content-between align-items-center mb-1">
-                        <Form.Label className="text-white-50 small fw-bold mb-0">
-                          Mobile Phone Number
-                        </Form.Label>
-                        {phoneVerified ? (
-                          <Badge bg="success" className="px-2 py-1">
-                            ✓ Verified
-                          </Badge>
-                        ) : (
-                          <span className="text-warning small" style={{ fontSize: '0.78rem' }}>
-                            * Requires OTP Verification
-                          </span>
-                        )}
-                      </div>
+                {/* Field 2: Email Address */}
+                <Form.Group className="mb-3" controlId="register-email">
+                  <Form.Label className="text-white-50 small fw-bold mb-1">
+                    Email Address
+                  </Form.Label>
+                  <Form.Control
+                    type="email"
+                    name="email"
+                    placeholder="name@example.com"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="bg-dark text-white border-secondary"
+                    required
+                    disabled={loading}
+                  />
+                  <Form.Text className="text-white-50 small" style={{ fontSize: '0.78rem' }}>
+                    A 3-minute verification link will be emailed to activate your account.
+                  </Form.Text>
+                </Form.Group>
 
-                      <InputGroup>
-                        <Form.Control
-                          type="tel"
-                          name="phone"
-                          placeholder="e.g. 9876543210 or +91 9876543210"
-                          value={formData.phone}
-                          onChange={handleChange}
-                          className="bg-dark text-white border-secondary"
-                          required
-                          disabled={phoneVerified || loading}
-                        />
-                        {!phoneVerified && (
-                          <Button
-                            variant="primary"
-                            className="btn-primary-custom px-3"
-                            onClick={handleSendPhoneOtp}
-                            disabled={!isValidPhone(formData.phone) || phoneSendingOtp || phoneOtpTimer > 0 || loading}
-                            id="send-phone-otp-btn"
-                          >
-                            {phoneSendingOtp
-                              ? 'Sending...'
-                              : phoneOtpTimer > 0
-                                ? `Resend (${phoneOtpTimer}s)`
-                                : phoneOtpSent
-                                  ? 'Resend OTP'
-                                  : 'Send OTP'}
-                          </Button>
-                        )}
-                        {phoneVerified && (
-                          <Button
-                            variant="outline-secondary"
-                            size="sm"
-                            className="text-white-50"
-                            onClick={() => {
-                              setPhoneVerified(false);
-                              setPhoneOtpSent(false);
-                              setPhoneOtpCode('');
-                              setPhoneOtpInfo('');
-                            }}
-                          >
-                            Change
-                          </Button>
-                        )}
-                      </InputGroup>
-                    </Form.Group>
+                {/* Field 3: Mobile Phone Number (No OTP Required) */}
+                <Form.Group className="mb-3" controlId="register-phone">
+                  <Form.Label className="text-white-50 small fw-bold mb-1">
+                    Mobile Phone Number <span className="text-white-50 fw-normal">(Optional)</span>
+                  </Form.Label>
+                  <Form.Control
+                    type="tel"
+                    name="phone"
+                    placeholder="e.g. +91 90007 30843 or 9000730843"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    className="bg-dark text-white border-secondary"
+                    disabled={loading}
+                  />
+                  <Form.Text className="text-white-50 small" style={{ fontSize: '0.78rem' }}>
+                    Used for giveaway prize alerts and SMS notifications. No OTP required.
+                  </Form.Text>
+                </Form.Group>
 
-                    {/* 6-Digit OTP Entry Form (Shown after Send OTP is clicked) */}
-                    {phoneOtpSent && !phoneVerified && (
-                      <div className="mb-3 p-3 rounded bg-dark bg-opacity-75 border border-primary border-opacity-50">
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                          <label className="text-white-50 small fw-bold mb-0">
-                            Enter 6-Digit Mobile OTP
-                          </label>
-                          <small className="text-white-50">Sent via SMS</small>
-                        </div>
-                        <InputGroup>
-                          <Form.Control
-                            type="text"
-                            maxLength={6}
-                            placeholder="Enter 6-digit SMS code"
-                            value={phoneOtpCode}
-                            onChange={(e) => {
-                              setPhoneOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6));
-                              setError('');
-                            }}
-                            className="bg-dark text-white border-secondary text-center fw-bold fs-5"
-                            disabled={phoneVerifyingOtp || loading}
-                            autoFocus
-                          />
-                          <Button
-                            variant="success"
-                            className="px-3 fw-bold"
-                            onClick={handleVerifyPhoneOtp}
-                            disabled={phoneOtpCode.length !== 6 || phoneVerifyingOtp || loading}
-                            id="verify-phone-otp-btn"
-                          >
-                            {phoneVerifyingOtp ? 'Verifying...' : 'Verify OTP ✓'}
-                          </Button>
-                        </InputGroup>
-                      </div>
-                    )}
-
-                    {/* Optional Email Address */}
-                    <Form.Group className="mb-3" controlId="register-optional-email">
-                      <Form.Label className="text-white-50 small fw-bold mb-1">
-                        Email Address <span className="text-white-50 fw-normal">(Optional)</span>
-                      </Form.Label>
-                      <Form.Control
-                        type="email"
-                        name="email"
-                        placeholder="name@example.com (optional)"
-                        value={formData.email}
-                        onChange={handleChange}
-                        className="bg-dark text-white border-secondary"
-                        disabled={loading}
-                      />
-                    </Form.Group>
-                  </>
-                )}
-
-                {/* TAB 2: Email Registration with 3-Minute Verification Link */}
-                {activeTab === 'email' && (
-                  <>
-                    <Form.Group className="mb-3" controlId="register-email">
-                      <Form.Label className="text-white-50 small fw-bold mb-1">
-                        Email Address
-                      </Form.Label>
-                      <Form.Control
-                        type="email"
-                        name="email"
-                        placeholder="name@example.com"
-                        value={formData.email}
-                        onChange={handleChange}
-                        className="bg-dark text-white border-secondary"
-                        required
-                        disabled={loading}
-                      />
-                      <Form.Text className="text-white-50 small" style={{ fontSize: '0.78rem' }}>
-                        A 3-minute verification link will be emailed to activate your account.
-                      </Form.Text>
-                    </Form.Group>
-
-                    {/* Optional Mobile Phone Number */}
-                    <Form.Group className="mb-3" controlId="register-optional-phone">
-                      <Form.Label className="text-white-50 small fw-bold mb-1">
-                        Mobile Phone Number <span className="text-white-50 fw-normal">(Optional)</span>
-                      </Form.Label>
-                      <Form.Control
-                        type="tel"
-                        name="phone"
-                        placeholder="e.g. +91 9876543210 (optional)"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        className="bg-dark text-white border-secondary"
-                        disabled={loading}
-                      />
-                    </Form.Group>
-                  </>
-                )}
-
-                {/* Password */}
+                {/* Field 4: Password */}
                 <Form.Group className="mb-3" controlId="register-password">
                   <Form.Label className="text-white-50 small fw-bold mb-1">
                     Password
@@ -676,7 +424,7 @@ function RegisterPage() {
                   />
                 </Form.Group>
 
-                {/* Confirm Password */}
+                {/* Field 5: Confirm Password */}
                 <Form.Group className="mb-4" controlId="register-confirm-password">
                   <Form.Label className="text-white-50 small fw-bold mb-1">
                     Confirm Password
@@ -697,14 +445,10 @@ function RegisterPage() {
                 <Button
                   type="submit"
                   className="btn-primary-custom w-100 py-3 fw-bold fs-6"
-                  disabled={loading || (activeTab === 'phone' && !phoneVerified)}
+                  disabled={loading}
                   id="register-submit-btn"
                 >
-                  {loading
-                    ? 'Creating Account...'
-                    : activeTab === 'phone'
-                      ? 'Create Account with Mobile →'
-                      : 'Send Verification Link →'}
+                  {loading ? 'Creating Account...' : 'Create Account →'}
                 </Button>
               </Form>
 

@@ -493,7 +493,6 @@ export const register = async (req, res) => {
     }
 
     let normalizedPhone = null;
-    let isPhoneVerified = false;
 
     if (phone) {
       normalizedPhone = normalizePhoneNumber(phone);
@@ -512,24 +511,6 @@ export const register = async (req, res) => {
           message: 'An account with this mobile phone number is already registered. Please log in.'
         });
       }
-
-      // Check OTP verification for mobile phone
-      const cachedPhoneVerification = phoneVerificationCache.get(normalizedPhone);
-      const isCachedVerified = cachedPhoneVerification && Date.now() <= cachedPhoneVerification.expiresAt;
-
-      const cachedPhoneOtp = otpCache.get(normalizedPhone);
-      const isDirectOtpMatch = phoneOtp && (String(phoneOtp).trim() === '123456' || (cachedPhoneOtp && cachedPhoneOtp.otp === String(phoneOtp).trim()));
-
-      if (!isCachedVerified && !isDirectOtpMatch) {
-        return res.status(400).json({
-          success: false,
-          message: 'Please verify your mobile phone number with the 6-digit OTP code before submitting.'
-        });
-      }
-
-      isPhoneVerified = true;
-      phoneVerificationCache.delete(normalizedPhone);
-      otpCache.delete(normalizedPhone);
     }
 
     let normalizedEmail = null;
@@ -585,9 +566,9 @@ export const register = async (req, res) => {
       phone: normalizedPhone || undefined,
       passwordHash,
       role,
-      verified: isPhoneVerified ? true : false,
+      verified: !normalizedEmail, // if phone-only, verified immediately
       emailVerified: false,
-      phoneVerified: isPhoneVerified,
+      phoneVerified: Boolean(normalizedPhone),
       verificationToken,
       verificationTokenExpires
     });
@@ -600,29 +581,25 @@ export const register = async (req, res) => {
         : { VEs: 500, SVEs: 1500, Tokens: 3000 }
     });
 
-    // If verified by phone OTP, auto-login user immediately
-    if (isPhoneVerified) {
+    // If registered without email (phone-only), log in directly
+    if (!normalizedEmail) {
       const payload = {
         id: newUser.externalId,
-        email: newUser.email,
         phone: newUser.phone,
         name: newUser.name,
         verified: true,
-        emailVerified: newUser.emailVerified,
-        phoneVerified: true,
         role: newUser.role
       };
       const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 
       return res.status(201).json({
         success: true,
-        phoneVerified: true,
         token,
         user: {
           ...payload,
           balances: wallet.balances
         },
-        message: 'Account registered and mobile number verified successfully!'
+        message: 'Account registered successfully!'
       });
     }
 
