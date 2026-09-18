@@ -228,6 +228,17 @@ export const joinGiveaway = async (req, res) => {
       metadata: { deviceHash, ipAddress, userAgent }
     });
 
+    let updatedGiveaway = null;
+    try {
+      updatedGiveaway = await Giveaway.findByIdAndUpdate(
+        giveawayId,
+        { $inc: { entries: 1, participants: 1 } },
+        { new: true }
+      ).lean();
+    } catch {
+      // non-blocking
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Participation recorded successfully',
@@ -239,6 +250,16 @@ export const joinGiveaway = async (req, res) => {
           amount: requiredAmount,
           balanceBefore: deductionResult.balanceBefore,
           balanceAfter: deductionResult.balanceAfter
+        },
+        wallet: {
+          balances: deductionResult.balances,
+          currency: requiredCurrency,
+          remaining: deductionResult.balanceAfter
+        },
+        giveaway: {
+          id: giveawayId,
+          participants: updatedGiveaway?.participants || (giveaway.participants + 1),
+          entries: updatedGiveaway?.entries || (giveaway.entries + 1)
         },
         giveawayId,
         userId,

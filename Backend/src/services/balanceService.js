@@ -38,7 +38,7 @@ export const deductWalletBalance = async ({ userId, currency = 'VEs', amount = 0
     return { success: false, balanceBefore, balanceAfter: balanceBefore, currency, amount };
   }
 
-  return { success: true, balanceBefore, balanceAfter: updated.balances[currency], currency, amount };
+  return { success: true, balanceBefore, balanceAfter: updated.balances[currency], balances: updated.balances, currency, amount };
 };
 
 export const reverseWalletBalance = async ({ userId, currency = 'VEs', amount = 0 }) => {

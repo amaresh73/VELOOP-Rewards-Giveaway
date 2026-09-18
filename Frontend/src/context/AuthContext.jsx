@@ -18,6 +18,39 @@ export function AuthProvider({ children }) {
     return null;
   });
 
+  const refreshUser = async () => {
+    try {
+      const response = await api.get('/auth/me');
+      const nextUser = response.data?.user || null;
+      if (nextUser) {
+        if (nextUser.balances?.VEs !== undefined) nextUser.points = nextUser.balances.VEs;
+        setUser(nextUser);
+        localStorage.setItem('veloop-user', JSON.stringify(nextUser));
+      }
+      return nextUser;
+    } catch (error) {
+      console.error('Unable to refresh auth session', error);
+      return null;
+    }
+  };
+
+  const updateBalances = (newBalances) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const mergedBalances = {
+        ...(prev.balances || {}),
+        ...newBalances
+      };
+      const updated = {
+        ...prev,
+        balances: mergedBalances,
+        points: mergedBalances.VEs !== undefined ? mergedBalances.VEs : prev.points
+      };
+      localStorage.setItem('veloop-user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   useEffect(() => {
     if (!token) {
       localStorage.removeItem('veloop-user');
@@ -25,25 +58,7 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    const loadCurrentUser = async () => {
-      try {
-        const response = await api.get('/auth/me');
-        const nextUser = response.data?.user || null;
-        if (nextUser) {
-          if (nextUser.balances?.VEs !== undefined) nextUser.points = nextUser.balances.VEs;
-          setUser(nextUser);
-          localStorage.setItem('veloop-user', JSON.stringify(nextUser));
-        }
-      } catch (error) {
-        console.error('Unable to refresh auth session', error);
-        localStorage.removeItem('veloop-token');
-        localStorage.removeItem('veloop-user');
-        setToken('');
-        setUser(null);
-      }
-    };
-
-    loadCurrentUser();
+    refreshUser();
   }, [token]);
 
   // Mobile OTP Authentication Flow
@@ -214,6 +229,8 @@ export function AuthProvider({ children }) {
       googleAuth,
       changePassword,
       deleteAccount,
+      refreshUser,
+      updateBalances,
       sendOtp,
       verifyOtp,
       verifyRegistrationOtp,
