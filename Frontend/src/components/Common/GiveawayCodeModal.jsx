@@ -20,8 +20,8 @@ export default function GiveawayCodeModal({ show, onHide, onCodeRedeemed }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!isLoggedIn) {
-      setStatus({ type: 'warning', message: 'Please log in to redeem promo codes.' });
+    if (!isLoggedIn || !user) {
+      setStatus({ type: 'danger', message: 'You must be logged in to redeem giveaway codes. Codes cannot be redeemed without logging in.' });
       return;
     }
 
@@ -48,33 +48,31 @@ export default function GiveawayCodeModal({ show, onHide, onCodeRedeemed }) {
           message: res.data.message || `Code redeemed successfully! Added ${res.data.bonus || 500} VEs to your account.`,
           bonus: res.data.bonus
         });
-        if (onCodeRedeemed) {
+        if (onCodeRedeemed && isLoggedIn) {
           onCodeRedeemed(res.data.bonus || 500);
         }
       }
     } catch (err) {
       // Local fallback for offline/demo if server returns not-implemented or error
       const match = VALID_CODES[cleanCode];
-      if (match) {
-        if (user) {
-          const updatedBalances = {
-            ...(user.balances || { VEs: 0, SVEs: 0, Tokens: 0 }),
-            VEs: ((user.balances?.VEs) || 0) + match.amount
-          };
-          const updatedUser = {
-            ...user,
-            balances: updatedBalances,
-            points: updatedBalances.VEs
-          };
-          setUser(updatedUser);
-          localStorage.setItem('veloop-user', JSON.stringify(updatedUser));
-        }
+      if (match && isLoggedIn && user) {
+        const updatedBalances = {
+          ...(user.balances || { VEs: 0, SVEs: 0, Tokens: 0 }),
+          VEs: ((user.balances?.VEs) || 0) + match.amount
+        };
+        const updatedUser = {
+          ...user,
+          balances: updatedBalances,
+          points: updatedBalances.VEs
+        };
+        setUser(updatedUser);
+        localStorage.setItem('veloop-user', JSON.stringify(updatedUser));
         setStatus({
           type: 'success',
           message: `Code redeemed successfully! Added ${match.amount} VEs to your account.`,
           bonus: match.amount
         });
-        if (onCodeRedeemed) {
+        if (onCodeRedeemed && isLoggedIn) {
           onCodeRedeemed(match.amount);
         }
       } else {

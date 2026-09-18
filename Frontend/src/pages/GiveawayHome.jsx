@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Container, Row, Col, Badge } from 'react-bootstrap';
 import { faqData, giveawayData, currentWinnerData, previousWinnerData } from '../data/giveawayData';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +16,7 @@ import api from '../services/api';
 
 function GiveawayHome() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [giveaways, setGiveaways] = useState(giveawayData);
   const [loading, setLoading] = useState(true);
   const [winners, setWinners] = useState(currentWinnerData);
@@ -102,6 +103,7 @@ function GiveawayHome() {
   };
 
   const handleCodeRedeemed = (amount) => {
+    if (!isLoggedIn) return; // STRICT GUARD: without login, never redeem or display bonus!
     setBonusNotification(`🎉 Awesome! +${amount} VEs added to your rewards wallet!`);
     setTimeout(() => setBonusNotification(''), 6000);
   };
@@ -135,7 +137,13 @@ function GiveawayHome() {
   const grandPrize = giveaways[0] || giveawayData[0];
 
   const handleQuickCodeSubmit = (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
+    if (!isLoggedIn) {
+      navigate('/login?redirect=/', {
+        state: { message: 'Please log in to redeem giveaway codes. Codes can only be redeemed after logging in.' }
+      });
+      return;
+    }
     setShowCodeModal(true);
   };
 
@@ -190,14 +198,14 @@ function GiveawayHome() {
                       type="text"
                       placeholder={isLoggedIn ? "Have a promo code? (e.g. VELOOP2026)" : "Log in to redeem promo code (e.g. VELOOP2026)"}
                       className="form-control bg-transparent border-0 text-white shadow-none small"
-                      onClick={() => setShowCodeModal(true)}
+                      onClick={handleQuickCodeSubmit}
                       readOnly
                       style={{ cursor: 'pointer' }}
                     />
                     <button
                       type="button"
                       className="btn btn-primary-custom rounded-pill px-3 py-1 text-nowrap fw-semibold small"
-                      onClick={() => setShowCodeModal(true)}
+                      onClick={handleQuickCodeSubmit}
                     >
                       {isLoggedIn ? 'Redeem Code →' : 'Log In to Redeem →'}
                     </button>
