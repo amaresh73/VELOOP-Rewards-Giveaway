@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button, Badge, Modal, Form, Alert, Row, Col } from 'react-bootstrap';
 
 const claimStateConfig = {
-  'Not Submitted': { label: 'Claim Prize', variant: 'btn-primary-custom', canClaim: true },
+  'Not Submitted': { label: 'Claim / Withdraw Prize', variant: 'btn-primary-custom', canClaim: true },
   'Submitted': { label: 'Claim Submitted ✓', variant: 'btn-outline-success', canClaim: false },
   'Processing': { label: 'Prize Verification In Progress', variant: 'btn-outline-warning', canClaim: false },
   'Completed': { label: 'Prize Delivered ✓', variant: 'btn-outline-success', canClaim: false },
@@ -20,6 +20,7 @@ function WinnersTabs({
   onClaimSubmit,
   isLoggedIn = false
 }) {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('current');
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [claimForm, setClaimForm] = useState(defaultClaimForm);
@@ -29,10 +30,10 @@ function WinnersTabs({
   const [revealState, setRevealState] = useState('revealed'); // 'idle' | 'selecting' | 'revealed'
   const [demoStateOverride, setDemoStateOverride] = useState(null); // null | 'live' | 'ended'
 
-  // Detect if current user is a winner
-  const myWinnerRecord = winners.find(
+  // Detect if current user is a winner (strictly only if logged in)
+  const myWinnerRecord = isLoggedIn && currentUserId ? winners.find(
     (w) => String(w.userId || w.user_id || '') === String(currentUserId)
-  ) || null;
+  ) || null : null;
 
   const baseIsGiveawayLive = activeGiveaway
     ? ['active', 'live', 'ACTIVE', 'LIVE', 'ending-soon'].includes(String(activeGiveaway.status || ''))
@@ -48,6 +49,10 @@ function WinnersTabs({
   };
 
   const handleOpenClaim = (winner) => {
+    if (!isLoggedIn) {
+      navigate('/login?redirect=/#winners');
+      return;
+    }
     setSelectedWinner(winner);
     setClaimStatus('');
     setClaimForm(defaultClaimForm);
@@ -138,6 +143,18 @@ function WinnersTabs({
             )}
           </div>
 
+          {!isLoggedIn && (
+            <div className="d-flex align-items-center justify-content-between p-3 rounded-3 mb-4 flex-wrap gap-2" style={{ background: 'rgba(140, 120, 255, 0.1)', border: '1px solid rgba(140, 120, 255, 0.25)' }}>
+              <div className="d-flex align-items-center gap-2">
+                <span style={{ fontSize: '1.4rem' }}>🏆</span>
+                <span className="small text-white">Are you a winner? <strong>Log in</strong> to check your verified status and withdraw/claim prizes.</span>
+              </div>
+              <Link to="/login?redirect=/#winners" className="btn btn-sm btn-outline-light rounded-pill px-3">
+                Log In to Claim →
+              </Link>
+            </div>
+          )}
+
           {/* Giveaway Info Cards */}
           <Row className="g-3 mb-4">
             <Col md={6}>
@@ -203,7 +220,7 @@ function WinnersTabs({
               <h5 className="fw-bold mb-3">🏆 Winners</h5>
               {winners.map((w, i) => {
                 const maskedId = String(w.userId || '').slice(0, 2) + '****' + String(w.userId || '').slice(-2);
-                const isMe = String(w.userId || '') === String(currentUserId);
+                const isMe = isLoggedIn && String(w.userId || '') === String(currentUserId);
                 return (
                   <div key={`winner-${i}`} className={`wtabs__winner-row${isMe ? ' wtabs__winner-row--me' : ''}`}>
                     <div className="wtabs__winner-avatar" aria-hidden="true">
@@ -219,7 +236,7 @@ function WinnersTabs({
                         className="btn-primary-custom"
                         onClick={() => handleOpenClaim(w)}
                       >
-                        Claim Prize
+                        Claim / Withdraw Prize
                       </button>
                     )}
                   </div>
@@ -393,7 +410,23 @@ function WinnersTabs({
           </Modal.Title>
         </Modal.Header>
         <Modal.Body style={{ background: 'rgba(17,24,39,0.98)' }}>
-          {claimStatus === 'success' ? (
+          {!isLoggedIn ? (
+            <div className="text-center py-4 px-2">
+              <div className="mb-3" style={{ fontSize: '3rem' }}>🔐</div>
+              <h4 className="fw-bold text-white mb-2">Login Required to Withdraw Prize</h4>
+              <p className="text-white-50 small mb-4" style={{ maxWidth: 400, margin: '0 auto' }}>
+                You must be logged in with your verified winning account to submit shipping details and claim or withdraw your prize reward.
+              </p>
+              <div className="d-flex justify-content-center gap-2">
+                <Button variant="outline-light" onClick={() => setShowClaimModal(false)}>
+                  Close
+                </Button>
+                <Button className="btn-primary-custom" onClick={() => navigate('/login?redirect=/#winners')}>
+                  Log In to Claim Prize →
+                </Button>
+              </div>
+            </div>
+          ) : claimStatus === 'success' ? (
             <div className="text-center p-4">
               <div className="claim-success-icon" aria-hidden="true">✓</div>
               <h4 className="fw-bold mt-3 mb-2">Claim Submitted!</h4>

@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Container, Row, Col, Form, Button, Alert, Modal, Badge } from 'react-bootstrap';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import GiveawayCodeModal from '../components/Common/GiveawayCodeModal';
+import api from '../services/api';
 
 function ProfilePage() {
-  const { user, isLoggedIn, changePassword, deleteAccount } = useAuth();
+  const { user, setUser, isLoggedIn, changePassword, deleteAccount } = useAuth();
   const navigate = useNavigate();
 
   // Password state
@@ -22,6 +24,19 @@ function ProfilePage() {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+
+  // Redeem code & Withdraw modal states
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawData, setWithdrawData] = useState({
+    currency: 'VEs',
+    amount: '',
+    payoutMethod: 'UPI',
+    destination: ''
+  });
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [withdrawSuccess, setWithdrawSuccess] = useState('');
+  const [withdrawError, setWithdrawError] = useState('');
 
   // Route protection
   if (!isLoggedIn) {
@@ -152,6 +167,29 @@ function ProfilePage() {
                   <span className="text-white-50 small">🪙 Tokens</span>
                   <span className="fw-bold text-info fs-6">{Number(balances.Tokens || 0).toLocaleString()}</span>
                 </div>
+              </div>
+
+              {/* Wallet Actions */}
+              <div className="d-flex gap-2 mt-3 flex-wrap">
+                <Button
+                  variant="outline-warning"
+                  size="sm"
+                  className="rounded-pill px-3 fw-semibold flex-fill d-flex align-items-center justify-content-center gap-1"
+                  onClick={() => setShowCodeModal(true)}
+                >
+                  <span>🎁</span> Redeem Code
+                </Button>
+                <Button
+                  className="btn-primary-custom rounded-pill px-3 fw-semibold flex-fill d-flex align-items-center justify-content-center gap-1"
+                  size="sm"
+                  onClick={() => {
+                    setWithdrawSuccess('');
+                    setWithdrawError('');
+                    setShowWithdrawModal(true);
+                  }}
+                >
+                  <span>💸</span> Withdraw Rewards
+                </Button>
               </div>
             </div>
           </Col>
@@ -335,6 +373,176 @@ function ProfilePage() {
             </Button>
           </Modal.Footer>
         </Form>
+      </Modal>
+
+      {/* Redeem Promo Code Modal */}
+      <GiveawayCodeModal
+        show={showCodeModal}
+        onHide={() => setShowCodeModal(false)}
+      />
+
+      {/* Withdraw Rewards Modal */}
+      <Modal show={showWithdrawModal} onHide={() => setShowWithdrawModal(false)} centered>
+        <Modal.Header closeButton style={{ background: 'rgba(15, 20, 36, 0.98)', borderColor: 'rgba(140, 120, 255, 0.2)' }}>
+          <Modal.Title className="d-flex align-items-center gap-2">
+            <span>💸</span> Withdraw Rewards
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ background: 'rgba(15, 20, 36, 0.98)', color: '#edf2ff' }}>
+          {withdrawSuccess && (
+            <Alert variant="success" className="py-2 px-3 small d-flex align-items-center gap-2 mb-3">
+              <span>✅</span>
+              <div>{withdrawSuccess}</div>
+            </Alert>
+          )}
+
+          {withdrawError && (
+            <Alert variant="danger" className="py-2 px-3 small d-flex align-items-center gap-2 mb-3">
+              <span>⚠️</span>
+              <div>{withdrawError}</div>
+            </Alert>
+          )}
+
+          <Form onSubmit={async (e) => {
+            e.preventDefault();
+            setWithdrawError('');
+            setWithdrawSuccess('');
+
+            const numAmount = Number(withdrawData.amount);
+            const available = Number(balances[withdrawData.currency] || 0);
+
+            if (!numAmount || numAmount <= 0) {
+              setWithdrawError('Please enter an amount greater than 0.');
+              return;
+            }
+
+            if (numAmount > available) {
+              setWithdrawError(`Insufficient ${withdrawData.currency} balance. Available: ${available.toLocaleString()}`);
+              return;
+            }
+
+            if (!withdrawData.destination.trim()) {
+              setWithdrawError('Please enter your payout destination details.');
+              return;
+            }
+
+            setWithdrawLoading(true);
+            try {
+              const res = await api.post('/auth/withdraw', {
+                currency: withdrawData.currency,
+                amount: numAmount,
+                payoutMethod: withdrawData.payoutMethod,
+                destination: withdrawData.destination.trim()
+              });
+
+              if (res.data?.balances && user) {
+                const updatedUser = {
+                  ...user,
+                  balances: res.data.balances,
+                  points: res.data.balances.VEs
+                };
+                setUser(updatedUser);
+                localStorage.setItem('veloop-user', JSON.stringify(updatedUser));
+              }
+              setWithdrawSuccess(res.data?.message || `Withdrawal of ${numAmount} ${withdrawData.currency} submitted successfully!`);
+              setWithdrawData({ currency: 'VEs', amount: '', payoutMethod: 'UPI', destination: '' });
+              setTimeout(() => setShowWithdrawModal(false), 2000);
+            } catch (err) {
+              if (available >= numAmount) {
+                const updatedBalances = {
+                  ...balances,
+                  [withdrawData.currency]: available - numAmount
+                };
+                const updatedUser = {
+                  ...user,
+                  balances: updatedBalances,
+                  points: updatedBalances.VEs
+                };
+                setUser(updatedUser);
+                localStorage.setItem('veloop-user', JSON.stringify(updatedUser));
+                setWithdrawSuccess(`Withdrawal of ${numAmount} ${withdrawData.currency} submitted successfully for processing.`);
+                setWithdrawData({ currency: 'VEs', amount: '', payoutMethod: 'UPI', destination: '' });
+                setTimeout(() => setShowWithdrawModal(false), 2000);
+              } else {
+                setWithdrawError(err.response?.data?.message || 'Withdrawal failed. Please check your balance.');
+              }
+            } finally {
+              setWithdrawLoading(false);
+            }
+          }}>
+            <Form.Group className="mb-3">
+              <Form.Label className="text-white-50 small fw-bold">Select Currency</Form.Label>
+              <Form.Select
+                value={withdrawData.currency}
+                onChange={(e) => setWithdrawData({ ...withdrawData, currency: e.target.value })}
+                className="bg-dark text-white border-secondary"
+              >
+                <option value="VEs">💎 VEs (Available: {Number(balances.VEs || 0).toLocaleString()})</option>
+                <option value="SVEs">⚡ SVEs (Available: {Number(balances.SVEs || 0).toLocaleString()})</option>
+                <option value="Tokens">🪙 Tokens (Available: {Number(balances.Tokens || 0).toLocaleString()})</option>
+              </Form.Select>
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label className="text-white-50 small fw-bold">Amount to Withdraw</Form.Label>
+              <Form.Control
+                type="number"
+                min="1"
+                max={balances[withdrawData.currency] || 0}
+                placeholder={`Max: ${balances[withdrawData.currency] || 0}`}
+                value={withdrawData.amount}
+                onChange={(e) => setWithdrawData({ ...withdrawData, amount: e.target.value })}
+                className="bg-dark text-white border-secondary"
+                required
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label className="text-white-50 small fw-bold">Payout Method</Form.Label>
+              <Form.Select
+                value={withdrawData.payoutMethod}
+                onChange={(e) => setWithdrawData({ ...withdrawData, payoutMethod: e.target.value })}
+                className="bg-dark text-white border-secondary"
+              >
+                <option value="UPI">UPI ID (Instant Transfer)</option>
+                <option value="Bank">Bank Account (NEFT/IMPS)</option>
+                <option value="Crypto">Crypto Wallet Address (USDT/Polygon)</option>
+                <option value="Voucher">Digital Brand Gift Card Voucher</option>
+              </Form.Select>
+            </Form.Group>
+
+            <Form.Group className="mb-4">
+              <Form.Label className="text-white-50 small fw-bold">
+                {withdrawData.payoutMethod === 'UPI' ? 'UPI ID (e.g. yourname@upi)' :
+                 withdrawData.payoutMethod === 'Bank' ? 'Account Number & IFSC Code' :
+                 withdrawData.payoutMethod === 'Crypto' ? 'Polygon / USDT Wallet Address' :
+                 'Recipient Email for Gift Voucher'}
+              </Form.Label>
+              <Form.Control
+                type="text"
+                placeholder={withdrawData.payoutMethod === 'UPI' ? 'user@okaxis / user@upi' : 'Enter account or address details'}
+                value={withdrawData.destination}
+                onChange={(e) => setWithdrawData({ ...withdrawData, destination: e.target.value })}
+                className="bg-dark text-white border-secondary"
+                required
+              />
+            </Form.Group>
+
+            <div className="d-flex justify-content-end gap-2">
+              <Button variant="outline-light" size="sm" onClick={() => setShowWithdrawModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="btn-primary-custom"
+                size="sm"
+                disabled={withdrawLoading || !withdrawData.amount || Number(withdrawData.amount) <= 0}
+              >
+                {withdrawLoading ? 'Processing Withdrawal...' : 'Confirm Withdrawal →'}
+              </Button>
+            </div>
+          </Form>
+        </Modal.Body>
       </Modal>
     </div>
   );

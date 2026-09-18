@@ -10,7 +10,9 @@ import {
   verifyRegistrationOtp,
   sendEmailOtp,
   verifyEmailOtp,
-  resetPassword
+  resetPassword,
+  redeemPromoCode,
+  requestWithdrawal
 } from '../controllers/authController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { rateLimiter } from '../middleware/rateLimitMiddleware.js';
@@ -35,5 +37,7 @@ router.get('/login', (req, res) => {
 router.get('/me', protect, getCurrentUser);
 router.put('/change-password', protect, rateLimiter({ max: 10, windowMs: 60_000, message: 'Too many attempts. Please try again later.' }), changePassword);
 router.delete('/delete-account', protect, rateLimiter({ max: 5, windowMs: 60_000, message: 'Too many attempts. Please try again later.' }), deleteAccount);
+router.post('/redeem-code', protect, rateLimiter({ max: 10, windowMs: 60_000, message: 'Too many redemption attempts. Please wait.' }), redeemPromoCode);
+router.post('/withdraw', protect, rateLimiter({ max: 5, windowMs: 60_000, message: 'Too many withdrawal attempts. Please wait.' }), requestWithdrawal);
 
 export default router;

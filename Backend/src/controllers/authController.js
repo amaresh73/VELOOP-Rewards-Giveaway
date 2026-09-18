@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import Wallet from '../models/Wallet.js';
 import GiveawayParticipation from '../models/GiveawayParticipation.js';
 import PrizeClaim from '../models/PrizeClaim.js';
+import AuditLog from '../models/AuditLog.js';
 import { sendOtpEmail } from '../services/emailService.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'veloop-dev-secret';
@@ -782,4 +783,108 @@ export const deleteAccount = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const redeemPromoCode = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Please log in to redeem promo codes.' });
+    }
+
+    const { code } = req.body;
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ success: false, message: 'Promo code is required.' });
+    }
+
+    const cleanCode = code.trim().toUpperCase();
+    const VALID_CODES = {
+      VELOOP2026: { amount: 500, label: 'VIP Welcome Bonus' },
+      SUMMERDROP: { amount: 250, label: 'Summer Drop Access Pass' },
+      REWARD500: { amount: 500, label: 'Exclusive Community Reward' },
+      LUCKYVE: { amount: 1000, label: 'Grand Loyalty Boost' }
+    };
+
+    const match = VALID_CODES[cleanCode];
+    if (!match) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired giveaway code.' });
+    }
+
+    const updatedWallet = await Wallet.findOneAndUpdate(
+      { userId },
+      { $inc: { 'balances.VEs': match.amount } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    return res.json({
+      success: true,
+      message: `Code redeemed successfully! Added ${match.amount} VEs to your account.`,
+      bonus: match.amount,
+      balances: updatedWallet.balances
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const requestWithdrawal = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Please log in to submit a withdrawal.' });
+    }
+
+    const { currency = 'VEs', amount, payoutMethod, destination } = req.body;
+
+    const numAmount = Number(amount);
+    if (!numAmount || numAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid withdrawal amount greater than 0.' });
+    }
+
+    if (!payoutMethod || !destination) {
+      return res.status(400).json({ success: false, message: 'Payout method and destination details are required.' });
+    }
+
+    const wallet = await Wallet.findOne({ userId });
+    const currentBalance = wallet?.balances?.[currency] || 0;
+
+    if (currentBalance < numAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient ${currency} balance. Available: ${currentBalance}, requested: ${numAmount}.`
+      });
+    }
+
+    const updatedWallet = await Wallet.findOneAndUpdate(
+      { userId, [`balances.${currency}`]: { $gte: numAmount } },
+      { $inc: { [`balances.${currency}`]: -numAmount } },
+      { new: true }
+    ).lean();
+
+    if (!updatedWallet) {
+      return res.status(400).json({ success: false, message: 'Withdrawal failed. Balance changed or insufficient.' });
+    }
+
+    await AuditLog.create({
+      entityType: 'Wallet',
+      entityId: String(userId),
+      action: 'WITHDRAWAL_REQUESTED',
+      performedBy: userId,
+      userId,
+      amount: numAmount,
+      currency,
+      result: 'PENDING',
+      requestId: req.headers['x-request-id'] || `withdraw-${Date.now()}`,
+      metadata: { payoutMethod, destination }
+    });
+
+    return res.json({
+      success: true,
+      message: `Withdrawal request of ${numAmount} ${currency} submitted successfully and is currently processing.`,
+      balances: updatedWallet.balances
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 

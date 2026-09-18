@@ -188,7 +188,7 @@ function GiveawayHome() {
                     <span className="ps-3 text-warning">🔑</span>
                     <input
                       type="text"
-                      placeholder="Have a promo code? (e.g. VELOOP2026)"
+                      placeholder={isLoggedIn ? "Have a promo code? (e.g. VELOOP2026)" : "Log in to redeem promo code (e.g. VELOOP2026)"}
                       className="form-control bg-transparent border-0 text-white shadow-none small"
                       onClick={() => setShowCodeModal(true)}
                       readOnly
@@ -199,7 +199,7 @@ function GiveawayHome() {
                       className="btn btn-primary-custom rounded-pill px-3 py-1 text-nowrap fw-semibold small"
                       onClick={() => setShowCodeModal(true)}
                     >
-                      Redeem Code →
+                      {isLoggedIn ? 'Redeem Code →' : 'Log In to Redeem →'}
                     </button>
                   </div>
 
