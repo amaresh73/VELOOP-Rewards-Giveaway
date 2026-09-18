@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { Form, Button, Alert, Container, InputGroup, Badge } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import GoogleAuthModal, { GoogleIcon } from '../components/Common/GoogleAuthModal';
 
 function RegisterPage() {
   const navigate = useNavigate();
-  const { register, sendEmailOtp, verifyEmailOtp } = useAuth();
+  const { register, sendEmailOtp, verifyEmailOtp, googleAuth } = useAuth();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -13,6 +14,10 @@ function RegisterPage() {
     password: '',
     confirmPassword: ''
   });
+
+  // Google Sign-Up state
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   // Email OTP verification state
   const [otpSent, setOtpSent] = useState(false);
@@ -260,6 +265,32 @@ function RegisterPage() {
             </Alert>
           )}
 
+          {/* Option 1: One-Click Sign Up with Google */}
+          <Button
+            variant="light"
+            className="w-100 py-2 d-flex align-items-center justify-content-center gap-2 fw-bold text-dark mb-3 border-0 shadow-sm"
+            style={{
+              background: '#ffffff',
+              borderRadius: '8px',
+              fontSize: '0.95rem'
+            }}
+            onClick={() => setShowGoogleModal(true)}
+            disabled={loading || googleLoading}
+            id="signup-google-btn"
+          >
+            <GoogleIcon size={20} />
+            <span>{googleLoading ? 'Connecting to Google...' : 'Sign up with Google'}</span>
+          </Button>
+
+          {/* Divider */}
+          <div className="d-flex align-items-center my-3 text-white-50 small">
+            <div className="flex-grow-1 border-top border-secondary border-opacity-25" />
+            <span className="px-3 text-uppercase text-white-50 fw-semibold" style={{ fontSize: '0.72rem', letterSpacing: '0.08em' }}>
+              or sign up with email [otp verification]
+            </span>
+            <div className="flex-grow-1 border-top border-secondary border-opacity-25" />
+          </div>
+
           <Form onSubmit={handleSubmit}>
             {/* Field 1: Full Name */}
             <Form.Group className="mb-3" controlId="register-name">
@@ -441,6 +472,26 @@ function RegisterPage() {
           </div>
         </div>
       </Container>
+
+      {/* Google Authentication Modal */}
+      <GoogleAuthModal
+        show={showGoogleModal}
+        onHide={() => setShowGoogleModal(false)}
+        mode="signup"
+        onGoogleSuccess={async (googleUser) => {
+          setGoogleLoading(true);
+          try {
+            await googleAuth(googleUser);
+            navigate('/', {
+              state: { message: `Welcome to VELOOP Rewards, ${googleUser.name}!` }
+            });
+          } catch (err) {
+            setError(err.response?.data?.message || 'Google sign up failed. Please try again.');
+          } finally {
+            setGoogleLoading(false);
+          }
+        }}
+      />
     </div>
   );
 }

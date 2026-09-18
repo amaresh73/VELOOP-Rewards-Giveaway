@@ -151,6 +151,26 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  // Google Authentication (Sign up or Login)
+  const googleAuth = async ({ credential, email, name, picture, googleId }) => {
+    const response = await api.post('/auth/google', {
+      credential,
+      email: email?.trim().toLowerCase(),
+      name: name?.trim(),
+      picture,
+      googleId
+    });
+    const nextToken = response.data.token;
+    const nextUser = response.data.user;
+
+    localStorage.setItem('veloop-token', nextToken);
+    localStorage.setItem('veloop-user', JSON.stringify(nextUser));
+    setToken(nextToken);
+    setUser(nextUser);
+
+    return response.data;
+  };
+
   const isLoggedIn = Boolean(token && user);
 
   const value = useMemo(
@@ -162,6 +182,7 @@ export function AuthProvider({ children }) {
       register,
       login,
       logout,
+      googleAuth,
       changePassword,
       deleteAccount,
       sendOtp,

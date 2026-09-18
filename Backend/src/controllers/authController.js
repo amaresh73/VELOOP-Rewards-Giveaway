@@ -887,4 +887,95 @@ export const requestWithdrawal = async (req, res) => {
   }
 };
 
+export const googleAuth = async (req, res) => {
+  try {
+    const { credential, email, name, picture, googleId } = req.body;
+
+    let userEmail = email;
+    let userName = name;
+    let userGoogleId = googleId;
+
+    // If Google ID token (JWT) is provided from Google Identity Services
+    if (credential && typeof credential === 'string') {
+      try {
+        const parts = credential.split('.');
+        if (parts.length === 3) {
+          const payloadJson = Buffer.from(parts[1], 'base64').toString('utf8');
+          const googlePayload = JSON.parse(payloadJson);
+          userEmail = googlePayload.email;
+          userName = googlePayload.name || googlePayload.given_name;
+          userGoogleId = googlePayload.sub;
+        }
+      } catch (err) {
+        console.warn('Google credential parse notice:', err.message);
+      }
+    }
+
+    if (!userEmail) {
+      return res.status(400).json({ success: false, message: 'Google account email is required.' });
+    }
+
+    const normalizedEmail = String(userEmail).trim().toLowerCase();
+    let userRecord = await User.findOne({ email: normalizedEmail });
+
+    if (!userRecord) {
+      const generatedExternalId = `usr-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const randomPassword = await bcrypt.hash(Math.random().toString(36), 10);
+
+      userRecord = await User.create({
+        externalId: generatedExternalId,
+        name: userName || normalizedEmail.split('@')[0],
+        email: normalizedEmail,
+        passwordHash: randomPassword,
+        role: 'member',
+        verified: true
+      });
+
+      await Wallet.create({
+        userId: generatedExternalId,
+        balances: { VEs: 500, SVEs: 1500, Tokens: 3000 }
+      });
+    } else {
+      if (!userRecord.verified) {
+        userRecord.verified = true;
+        await userRecord.save();
+      }
+    }
+
+    let wallet = await Wallet.findOne({ userId: userRecord.externalId });
+    if (!wallet) {
+      wallet = await Wallet.create({
+        userId: userRecord.externalId,
+        balances: userRecord.role === 'admin'
+          ? { VEs: 10000, SVEs: 50000, Tokens: 100000 }
+          : { VEs: 500, SVEs: 1500, Tokens: 3000 }
+      });
+    }
+
+    const payload = {
+      id: userRecord.externalId,
+      email: userRecord.email,
+      phone: userRecord.phone || undefined,
+      name: userRecord.name,
+      verified: true,
+      role: userRecord.role
+    };
+
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+
+    return res.json({
+      success: true,
+      token,
+      user: {
+        ...payload,
+        balances: wallet.balances || { VEs: 500, SVEs: 1500, Tokens: 3000 }
+      },
+      message: 'Signed in with Google successfully!'
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
 

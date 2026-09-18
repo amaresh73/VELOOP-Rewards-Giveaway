@@ -2,14 +2,18 @@ import { useState } from 'react';
 import { Form, Button, Alert, Container } from 'react-bootstrap';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import GoogleAuthModal, { GoogleIcon } from '../components/Common/GoogleAuthModal';
 
 function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, googleAuth } = useAuth();
 
   const searchParams = new URLSearchParams(location.search);
   const redirectTarget = searchParams.get('redirect') || '/';
+
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   // If navigated with state messages
   const registrationSuccessMessage = location.state?.registered ? location.state.message : '';
@@ -111,6 +115,32 @@ function LoginPage() {
             </Alert>
           )}
 
+          {/* Option 1: One-Click Sign In with Google */}
+          <Button
+            variant="light"
+            className="w-100 py-2 d-flex align-items-center justify-content-center gap-2 fw-bold text-dark mb-3 border-0 shadow-sm"
+            style={{
+              background: '#ffffff',
+              borderRadius: '8px',
+              fontSize: '0.95rem'
+            }}
+            onClick={() => setShowGoogleModal(true)}
+            disabled={loading || googleLoading}
+            id="login-google-btn"
+          >
+            <GoogleIcon size={20} />
+            <span>{googleLoading ? 'Connecting to Google...' : 'Continue with Google'}</span>
+          </Button>
+
+          {/* Divider */}
+          <div className="d-flex align-items-center my-3 text-white-50 small">
+            <div className="flex-grow-1 border-top border-secondary border-opacity-25" />
+            <span className="px-3 text-uppercase text-white-50 fw-semibold" style={{ fontSize: '0.72rem', letterSpacing: '0.08em' }}>
+              or log in with email
+            </span>
+            <div className="flex-grow-1 border-top border-secondary border-opacity-25" />
+          </div>
+
           {/* Login Form: Strictly Two Fields (Email & Password) */}
           <Form onSubmit={handleSubmit}>
             {/* Field 1: Email */}
@@ -177,6 +207,29 @@ function LoginPage() {
           </div>
         </div>
       </Container>
+
+      {/* Google Authentication Modal */}
+      <GoogleAuthModal
+        show={showGoogleModal}
+        onHide={() => setShowGoogleModal(false)}
+        mode="signin"
+        onGoogleSuccess={async (googleUser) => {
+          setGoogleLoading(true);
+          try {
+            const res = await googleAuth(googleUser);
+            const user = res?.user;
+            if (user?.role === 'admin' && redirectTarget === '/') {
+              navigate('/admin');
+            } else {
+              navigate(redirectTarget);
+            }
+          } catch (err) {
+            setError(err.response?.data?.message || 'Google login failed. Please try again.');
+          } finally {
+            setGoogleLoading(false);
+          }
+        }}
+      />
     </div>
   );
 }
