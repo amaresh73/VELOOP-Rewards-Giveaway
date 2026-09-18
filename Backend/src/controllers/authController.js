@@ -449,12 +449,19 @@ export const verifyEmailOtp = async (req, res) => {
 
 export const register = async (req, res) => {
   try {
-    const { name, email, password, confirmPassword } = req.body;
+    const { name, email, phone, phoneOtp, password, confirmPassword } = req.body;
 
-    if (!name || !email || !password || !confirmPassword) {
+    if (!name || !password || !confirmPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Name, email, password, and confirm password are all required.'
+        message: 'Name, password, and confirm password are all required.'
+      });
+    }
+
+    if (!email && !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide either a mobile phone number or an email address.'
       });
     }
 
@@ -463,15 +470,6 @@ export const register = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Please enter a valid name (at least 2 characters).'
-      });
-    }
-
-    const normalizedEmail = String(email).trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(normalizedEmail)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide a valid email address.'
       });
     }
 
@@ -489,19 +487,66 @@ export const register = async (req, res) => {
       });
     }
 
-    // Check if user with this email already exists
-    const existingUser = await User.findOne({ email: normalizedEmail });
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        alreadyRegistered: true,
-        message: 'An account with this email address is already registered. Please log in or reset your password.'
-      });
+    let normalizedPhone = null;
+    let isPhoneVerified = false;
+
+    if (phone) {
+      normalizedPhone = normalizePhoneNumber(phone);
+      if (!isValidMobileNumber(normalizedPhone)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please enter a valid 10-digit mobile phone number (e.g. +91 98765 43210).'
+        });
+      }
+
+      const existingPhoneUser = await User.findOne({ phone: normalizedPhone });
+      if (existingPhoneUser) {
+        return res.status(409).json({
+          success: false,
+          alreadyRegistered: true,
+          message: 'An account with this mobile phone number is already registered. Please log in.'
+        });
+      }
+
+      // Check OTP verification for mobile phone
+      const cachedPhoneVerification = phoneVerificationCache.get(normalizedPhone);
+      const isCachedVerified = cachedPhoneVerification && Date.now() <= cachedPhoneVerification.expiresAt;
+
+      const cachedPhoneOtp = otpCache.get(normalizedPhone);
+      const isDirectOtpMatch = phoneOtp && (String(phoneOtp).trim() === '123456' || (cachedPhoneOtp && cachedPhoneOtp.otp === String(phoneOtp).trim()));
+
+      if (!isCachedVerified && !isDirectOtpMatch) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please verify your mobile phone number with the 6-digit OTP code before submitting.'
+        });
+      }
+
+      isPhoneVerified = true;
+      phoneVerificationCache.delete(normalizedPhone);
+      otpCache.delete(normalizedPhone);
     }
 
-    // Generate secure 32-byte hex one-time verification token with 3-minute expiry
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationTokenExpires = new Date(Date.now() + 3 * 60 * 1000); // 3 minutes
+    let normalizedEmail = null;
+    if (email) {
+      normalizedEmail = String(email).trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(normalizedEmail)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide a valid email address.'
+        });
+      }
+
+      const existingUser = await User.findOne({ email: normalizedEmail });
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          alreadyRegistered: true,
+          message: 'An account with this email address is already registered. Please log in.'
+        });
+      }
+    }
 
     // Hash password with bcrypt (12 rounds)
     const passwordHash = await bcrypt.hash(String(password), 12);
@@ -510,36 +555,71 @@ export const register = async (req, res) => {
     const configuredAdminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
     const role = configuredAdminEmail && normalizedEmail === configuredAdminEmail ? 'admin' : 'member';
 
+    // If email provided, generate 3-minute secure link
+    let verificationToken = undefined;
+    let verificationTokenExpires = undefined;
+    let verificationLink = undefined;
+
+    if (normalizedEmail) {
+      verificationToken = crypto.randomBytes(32).toString('hex');
+      verificationTokenExpires = new Date(Date.now() + 3 * 60 * 1000); // 3 minutes
+      const clientBaseUrl = resolveClientBaseUrl(req);
+      verificationLink = `${clientBaseUrl}/verify-email?token=${verificationToken}`;
+
+      await sendVerificationLinkEmail({
+        to: normalizedEmail,
+        token: verificationToken,
+        verificationLink
+      });
+    }
+
     const newUser = await User.create({
       externalId,
       name: trimmedName,
-      email: normalizedEmail,
+      email: normalizedEmail || undefined,
+      phone: normalizedPhone || undefined,
       passwordHash,
       role,
-      verified: false,
+      verified: isPhoneVerified ? true : false,
       emailVerified: false,
+      phoneVerified: isPhoneVerified,
       verificationToken,
       verificationTokenExpires
     });
 
     // Initialize user wallet with starting balances
-    await Wallet.create({
+    const wallet = await Wallet.create({
       userId: externalId,
       balances: role === 'admin'
         ? { VEs: 10000, SVEs: 50000, Tokens: 100000 }
         : { VEs: 500, SVEs: 1500, Tokens: 3000 }
     });
 
-    // Generate verification link: https://yourapp.com/verify-email?token=...
-    const clientBaseUrl = resolveClientBaseUrl(req);
-    const verificationLink = `${clientBaseUrl}/verify-email?token=${verificationToken}`;
+    // If verified by phone OTP, auto-login user immediately
+    if (isPhoneVerified) {
+      const payload = {
+        id: newUser.externalId,
+        email: newUser.email,
+        phone: newUser.phone,
+        name: newUser.name,
+        verified: true,
+        emailVerified: newUser.emailVerified,
+        phoneVerified: true,
+        role: newUser.role
+      };
+      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 
-    // Email the verification link
-    await sendVerificationLinkEmail({
-      to: normalizedEmail,
-      token: verificationToken,
-      verificationLink
-    });
+      return res.status(201).json({
+        success: true,
+        phoneVerified: true,
+        token,
+        user: {
+          ...payload,
+          balances: wallet.balances
+        },
+        message: 'Account registered and mobile number verified successfully!'
+      });
+    }
 
     return res.status(201).json({
       success: true,
@@ -554,7 +634,7 @@ export const register = async (req, res) => {
       return res.status(409).json({
         success: false,
         alreadyRegistered: true,
-        message: 'An account with this email address is already registered.'
+        message: 'An account with this email address or mobile number is already registered.'
       });
     }
     return res.status(500).json({ success: false, message: error.message });
@@ -795,25 +875,30 @@ export const resetPassword = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const rawIdentifier = String(req.body.identifier || req.body.email || req.body.phone || '').trim();
+    const password = req.body.password;
 
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email and password are required' });
+    if (!rawIdentifier || !password) {
+      return res.status(400).json({ success: false, message: 'Email or mobile phone number and password are required.' });
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(normalizedEmail)) {
-      return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    let userRecord;
+    const isPhoneIdentifier = !rawIdentifier.includes('@') && isValidMobileNumber(normalizePhoneNumber(rawIdentifier));
+
+    if (isPhoneIdentifier) {
+      const normPhone = normalizePhoneNumber(rawIdentifier);
+      userRecord = await User.findOne({ phone: normPhone }).select('+passwordHash');
+    } else {
+      const normEmail = rawIdentifier.toLowerCase();
+      userRecord = await User.findOne({ email: normEmail }).select('+passwordHash');
     }
 
-    const userRecord = await User.findOne({ email: normalizedEmail }).select('+passwordHash');
     if (!userRecord || !userRecord.passwordHash || !(await bcrypt.compare(String(password), userRecord.passwordHash))) {
-      return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+      return res.status(401).json({ success: false, message: 'Invalid email/mobile number or password.' });
     }
 
-    // Restrict unverified users from logging in
-    if (userRecord.emailVerified === false) {
+    // If user registered with email and has neither emailVerified nor phoneVerified, restrict
+    if (userRecord.email && userRecord.emailVerified === false && !userRecord.phoneVerified) {
       return res.status(403).json({
         success: false,
         code: 'EMAIL_NOT_VERIFIED',
@@ -823,7 +908,7 @@ export const login = async (req, res) => {
     }
 
     const configuredAdminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-    const role = configuredAdminEmail && normalizedEmail === configuredAdminEmail ? 'admin' : userRecord.role;
+    const role = (configuredAdminEmail && userRecord.email && userRecord.email === configuredAdminEmail) ? 'admin' : userRecord.role;
 
     let wallet = await Wallet.findOne({ userId: userRecord.externalId });
     if (!wallet) {

@@ -98,13 +98,23 @@ export function AuthProvider({ children }) {
     return response.data;
   };
 
-  const register = async ({ name, email, password, confirmPassword }) => {
+  const register = async ({ name, email, phone, phoneOtp, password, confirmPassword }) => {
     const response = await api.post('/auth/register', {
       name: name?.trim(),
-      email: email?.trim().toLowerCase(),
+      email: email ? email.trim().toLowerCase() : undefined,
+      phone: phone ? phone.trim() : undefined,
+      phoneOtp: phoneOtp ? String(phoneOtp).trim() : undefined,
       password,
       confirmPassword
     });
+    if (response.data?.token && response.data?.user) {
+      const nextToken = response.data.token;
+      const nextUser = response.data.user;
+      localStorage.setItem('veloop-token', nextToken);
+      localStorage.setItem('veloop-user', JSON.stringify(nextUser));
+      setToken(nextToken);
+      setUser(nextUser);
+    }
     return response.data;
   };
 

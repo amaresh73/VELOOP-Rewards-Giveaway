@@ -43,7 +43,7 @@ const connectDB = async () => {
 
     if (mongoUri) {
       try {
-        await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 5000 });
+        await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 2000 });
         await ensureDemoUser();
         console.log('MongoDB connected successfully');
         return true;
