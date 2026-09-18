@@ -8,6 +8,7 @@ import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ProfilePage from './pages/ProfilePage';
 import AdminPanel from './pages/AdminPanel';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 
 function AppShell() {
   const { user, logout } = useAuth();
@@ -65,6 +66,7 @@ function AppShell() {
         <Route path="/" element={<GiveawayHome />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/signup" element={<Navigate to="/register" replace />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/profile" element={<ProfilePage />} />

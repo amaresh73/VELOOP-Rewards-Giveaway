@@ -7,13 +7,20 @@ import GoogleAuthModal, { GoogleIcon } from '../components/Common/GoogleAuthModa
 function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, googleAuth } = useAuth();
+  const { login, resendVerification, googleAuth } = useAuth();
 
   const searchParams = new URLSearchParams(location.search);
   const redirectTarget = searchParams.get('redirect') || '/';
 
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Email verification restriction states
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // If navigated with state messages
   const registrationSuccessMessage = location.state?.registered ? location.state.message : '';
@@ -27,15 +34,55 @@ function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Cooldown timer
+  useEffect(() => {
+    let timer = null;
+    if (resendCooldown > 0) {
+      timer = setInterval(() => setResendCooldown((prev) => prev - 1), 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [resendCooldown]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     setError('');
+    setEmailNotVerified(false);
+    setResendSuccess('');
+  };
+
+  const handleResendFromLogin = async () => {
+    const targetEmail = unverifiedEmail || formData.email.trim();
+    if (!targetEmail || resendCooldown > 0 || resendingVerification) return;
+
+    setResendingVerification(true);
+    setResendSuccess('');
+    setError('');
+
+    try {
+      const res = await resendVerification(targetEmail);
+      setResendSuccess(res.message || `A fresh verification link has been sent to ${targetEmail}. Valid for 3 minutes.`);
+      setResendCooldown(60);
+    } catch (err) {
+      if (err.response?.status === 429) {
+        const retry = err.response.data?.retryAfterSeconds || 60;
+        setResendCooldown(retry);
+        setError(err.response.data?.message || `Please wait ${retry}s before requesting again.`);
+      } else {
+        setError(err.response?.data?.message || 'Failed to resend verification email.');
+      }
+    } finally {
+      setResendingVerification(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setEmailNotVerified(false);
+    setResendSuccess('');
 
     const email = formData.email.trim();
     const password = formData.password;
@@ -56,10 +103,16 @@ function LoginPage() {
         navigate(redirectTarget);
       }
     } catch (err) {
-      const serverMessage = err.response?.data?.message 
-        || (err.code === 'ERR_NETWORK' ? 'Unable to reach the server. Please try again in a moment.' : err.message)
-        || 'Invalid email or password.';
-      setError(serverMessage);
+      if (err.response?.status === 403 && err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+        setEmailNotVerified(true);
+        setUnverifiedEmail(err.response.data?.email || email);
+        setError(err.response.data?.message || 'Your email address is not verified yet.');
+      } else {
+        const serverMessage = err.response?.data?.message 
+          || (err.code === 'ERR_NETWORK' ? 'Unable to reach the server. Please try again in a moment.' : err.message)
+          || 'Invalid email or password.';
+        setError(serverMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -107,8 +160,46 @@ function LoginPage() {
             </Alert>
           )}
 
-          {/* Error Banner */}
-          {error && (
+          {/* Email Not Verified Card with 1-Click Resend */}
+          {emailNotVerified && (
+            <div className="p-3 mb-3 rounded bg-warning bg-opacity-10 border border-warning border-opacity-40">
+              <div className="d-flex align-items-start gap-2 mb-2">
+                <span className="fs-5">⚠️</span>
+                <div>
+                  <strong className="text-warning d-block">Account Verification Required</strong>
+                  <span className="text-white-50 small">
+                    Your email <strong>{unverifiedEmail}</strong> has not been verified yet. Verification links expire in <strong>3 minutes</strong>.
+                  </span>
+                </div>
+              </div>
+
+              {resendSuccess && (
+                <div className="p-2 mb-2 rounded bg-success bg-opacity-25 text-success small fw-bold">
+                  ✓ {resendSuccess}
+                </div>
+              )}
+
+              <div className="d-grid mt-2">
+                <Button
+                  variant="warning"
+                  size="sm"
+                  className="fw-bold text-dark"
+                  onClick={handleResendFromLogin}
+                  disabled={resendingVerification || resendCooldown > 0}
+                  id="login-resend-btn"
+                >
+                  {resendingVerification
+                    ? 'Sending Verification Link...'
+                    : resendCooldown > 0
+                    ? `Resend Link (${resendCooldown}s)`
+                    : 'Resend Verification Link'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Standard Error Banner */}
+          {error && !emailNotVerified && (
             <Alert variant="danger" className="py-2 px-3 small d-flex align-items-center gap-2 mb-3">
               <span>⚠️</span>
               <div>{error}</div>

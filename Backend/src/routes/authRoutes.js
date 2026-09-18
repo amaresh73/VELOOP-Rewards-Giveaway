@@ -5,6 +5,8 @@ import {
   getCurrentUser,
   login,
   register,
+  verifyEmailToken,
+  resendVerificationEmail,
   sendOtp,
   verifyOtp,
   verifyRegistrationOtp,
@@ -21,6 +23,9 @@ import { rateLimiter } from '../middleware/rateLimitMiddleware.js';
 const router = express.Router();
 
 router.post('/register', rateLimiter({ max: 10, windowMs: 60_000, message: 'Too many registration attempts. Please wait a minute.' }), register);
+router.post('/verify-email', rateLimiter({ max: 20, windowMs: 60_000, message: 'Too many verification attempts. Please wait.' }), verifyEmailToken);
+router.get('/verify-email', rateLimiter({ max: 20, windowMs: 60_000, message: 'Too many verification attempts. Please wait.' }), verifyEmailToken);
+router.post('/resend-verification', rateLimiter({ max: 6, windowMs: 60_000, message: 'Too many resend attempts. Please wait a minute.' }), resendVerificationEmail);
 router.post('/google', rateLimiter({ max: 20, windowMs: 60_000, message: 'Too many Google sign-in attempts. Please wait.' }), googleAuth);
 router.post('/send-otp', rateLimiter({ max: 10, windowMs: 60_000, message: 'Too many OTP requests. Please wait a minute.' }), sendOtp);
 router.post('/verify-otp', rateLimiter({ max: 15, windowMs: 60_000, message: 'Too many OTP verification attempts. Please wait.' }), verifyOtp);

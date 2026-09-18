@@ -98,13 +98,32 @@ export function AuthProvider({ children }) {
     return response.data;
   };
 
-  const register = async ({ name, email, otp, password, confirmPassword }) => {
+  const register = async ({ name, email, password, confirmPassword }) => {
     const response = await api.post('/auth/register', {
       name: name?.trim(),
       email: email?.trim().toLowerCase(),
-      otp: otp?.trim(),
       password,
       confirmPassword
+    });
+    return response.data;
+  };
+
+  const verifyEmail = async (token) => {
+    const response = await api.post('/auth/verify-email', { token });
+    if (response.data?.token && response.data?.user) {
+      const nextToken = response.data.token;
+      const nextUser = response.data.user;
+      localStorage.setItem('veloop-token', nextToken);
+      localStorage.setItem('veloop-user', JSON.stringify(nextUser));
+      setToken(nextToken);
+      setUser(nextUser);
+    }
+    return response.data;
+  };
+
+  const resendVerification = async (email) => {
+    const response = await api.post('/auth/resend-verification', {
+      email: email?.trim().toLowerCase()
     });
     return response.data;
   };
@@ -180,6 +199,8 @@ export function AuthProvider({ children }) {
       token,
       isLoggedIn,
       register,
+      verifyEmail,
+      resendVerification,
       login,
       logout,
       googleAuth,

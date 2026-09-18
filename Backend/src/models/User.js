@@ -8,7 +8,10 @@ const userSchema = new mongoose.Schema(
     phone: { type: String, sparse: true, unique: true, trim: true, index: true },
     passwordHash: { type: String, select: false },
     role: { type: String, enum: ['member', 'admin'], default: 'member' },
-    verified: { type: Boolean, default: true }
+    verified: { type: Boolean, default: true },
+    emailVerified: { type: Boolean, default: false },
+    verificationToken: { type: String, select: false },
+    verificationTokenExpires: { type: Date, select: false }
   },
   { timestamps: true }
 );

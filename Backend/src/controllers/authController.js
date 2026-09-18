@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
@@ -5,7 +6,7 @@ import Wallet from '../models/Wallet.js';
 import GiveawayParticipation from '../models/GiveawayParticipation.js';
 import PrizeClaim from '../models/PrizeClaim.js';
 import AuditLog from '../models/AuditLog.js';
-import { sendOtpEmail } from '../services/emailService.js';
+import { sendOtpEmail, sendVerificationLinkEmail } from '../services/emailService.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'veloop-dev-secret';
 
@@ -16,6 +17,28 @@ const phoneVerificationCache = new Map();
 // Cache for email OTPs and verified registration emails
 const emailOtpCache = new Map();
 const verifiedEmailsCache = new Map();
+// Cache for per-email resend cooldown (minimum 60s between resend requests)
+const resendEmailCooldown = new Map();
+
+/**
+ * Resolves the appropriate client origin for verification links.
+ */
+export const resolveClientBaseUrl = (req) => {
+  const origin = req?.get?.('origin');
+  if (origin && (origin.startsWith('http://') || origin.startsWith('https://'))) {
+    return origin.replace(/\/$/, '');
+  }
+  const referer = req?.get?.('referer');
+  if (referer) {
+    try {
+      const parsed = new URL(referer);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch {
+      // ignore
+    }
+  }
+  return process.env.CLIENT_URL || 'https://veloop-rewards-giveaway-bay.vercel.app';
+};
 
 export const normalizePhoneNumber = (rawPhone = '') => {
   let cleaned = String(rawPhone).trim().replace(/[^\d+]/g, '');
@@ -426,7 +449,7 @@ export const verifyEmailOtp = async (req, res) => {
 
 export const register = async (req, res) => {
   try {
-    const { name, email, otp, password, confirmPassword } = req.body;
+    const { name, email, password, confirmPassword } = req.body;
 
     if (!name || !email || !password || !confirmPassword) {
       return res.status(400).json({
@@ -449,20 +472,6 @@ export const register = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Please provide a valid email address.'
-      });
-    }
-
-    // Verify email OTP status
-    const verifiedRecord = verifiedEmailsCache.get(normalizedEmail);
-    const hasValidVerification = verifiedRecord && Date.now() <= verifiedRecord.expiresAt;
-
-    const cachedOtp = emailOtpCache.get(normalizedEmail);
-    const directOtpMatch = otp && (String(otp).trim() === '123456' || (cachedOtp && cachedOtp.otp === String(otp).trim()));
-
-    if (!hasValidVerification && !directOtpMatch) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please verify your email address with the OTP code before completing registration.'
       });
     }
 
@@ -490,11 +499,11 @@ export const register = async (req, res) => {
       });
     }
 
-    // Clean up verification caches
-    verifiedEmailsCache.delete(normalizedEmail);
-    emailOtpCache.delete(normalizedEmail);
+    // Generate secure 32-byte hex one-time verification token with 3-minute expiry
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenExpires = new Date(Date.now() + 3 * 60 * 1000); // 3 minutes
 
-    // Hash password with bcrypt (never store plain text)
+    // Hash password with bcrypt (12 rounds)
     const passwordHash = await bcrypt.hash(String(password), 12);
     const externalId = `user-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
@@ -507,7 +516,10 @@ export const register = async (req, res) => {
       email: normalizedEmail,
       passwordHash,
       role,
-      verified: true
+      verified: false,
+      emailVerified: false,
+      verificationToken,
+      verificationTokenExpires
     });
 
     // Initialize user wallet with starting balances
@@ -518,15 +530,24 @@ export const register = async (req, res) => {
         : { VEs: 500, SVEs: 1500, Tokens: 3000 }
     });
 
+    // Generate verification link: https://yourapp.com/verify-email?token=...
+    const clientBaseUrl = resolveClientBaseUrl(req);
+    const verificationLink = `${clientBaseUrl}/verify-email?token=${verificationToken}`;
+
+    // Email the verification link
+    await sendVerificationLinkEmail({
+      to: normalizedEmail,
+      token: verificationToken,
+      verificationLink
+    });
+
     return res.status(201).json({
       success: true,
-      message: 'Account registered successfully. Please log in.',
-      user: {
-        id: newUser.externalId,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role
-      }
+      emailVerified: false,
+      message: 'Registration successful! A verification link has been sent to your email. The link will expire in 3 minutes.',
+      email: normalizedEmail,
+      expiresInSeconds: 180,
+      verificationLink: process.env.NODE_ENV !== 'production' ? verificationLink : undefined
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -536,6 +557,162 @@ export const register = async (req, res) => {
         message: 'An account with this email address is already registered.'
       });
     }
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Validates the verification token, marks email as verified, and invalidates the token.
+ */
+export const verifyEmailToken = async (req, res) => {
+  try {
+    const token = req.body?.token || req.query?.token;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({
+        success: false,
+        code: 'TOKEN_REQUIRED',
+        message: 'Verification token is required.'
+      });
+    }
+
+    const trimmedToken = token.trim();
+    const userRecord = await User.findOne({
+      verificationToken: trimmedToken
+    }).select('+verificationToken +verificationTokenExpires');
+
+    if (!userRecord) {
+      return res.status(400).json({
+        success: false,
+        code: 'TOKEN_INVALID',
+        message: 'This verification link is invalid or has already been used. Please log in or request a new link.'
+      });
+    }
+
+    // Check 3-minute expiry
+    const expiresTime = userRecord.verificationTokenExpires ? new Date(userRecord.verificationTokenExpires).getTime() : 0;
+    if (!expiresTime || Date.now() > expiresTime) {
+      return res.status(400).json({
+        success: false,
+        code: 'TOKEN_EXPIRED',
+        message: 'This verification link has expired. Verification links are valid for 3 minutes. Please request a new link.',
+        email: userRecord.email
+      });
+    }
+
+    // Mark email as verified and invalidate token
+    userRecord.emailVerified = true;
+    userRecord.verified = true;
+    userRecord.verificationToken = undefined;
+    userRecord.verificationTokenExpires = undefined;
+    await userRecord.save();
+
+    // Ensure wallet exists
+    let wallet = await Wallet.findOne({ userId: userRecord.externalId });
+    if (!wallet) {
+      wallet = await Wallet.create({
+        userId: userRecord.externalId,
+        balances: userRecord.role === 'admin'
+          ? { VEs: 10000, SVEs: 50000, Tokens: 100000 }
+          : { VEs: 500, SVEs: 1500, Tokens: 3000 }
+      });
+    }
+
+    const payload = {
+      id: userRecord.externalId,
+      email: userRecord.email,
+      phone: userRecord.phone || undefined,
+      name: userRecord.name,
+      verified: true,
+      emailVerified: true,
+      role: userRecord.role
+    };
+
+    const jwtToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+
+    return res.json({
+      success: true,
+      message: 'Email address verified successfully! Your account is now active.',
+      token: jwtToken,
+      user: {
+        ...payload,
+        balances: wallet.balances || { VEs: 500, SVEs: 1500, Tokens: 3000 }
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Resends verification link with rate limiting (60s cooldown per email).
+ */
+export const resendVerificationEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ success: false, message: 'Email address is required.' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid email address.' });
+    }
+
+    // Enforce 60-second cooldown per email
+    const lastSent = resendEmailCooldown.get(normalizedEmail);
+    const now = Date.now();
+    const COOLDOWN_MS = 60 * 1000;
+    if (lastSent && now - lastSent < COOLDOWN_MS) {
+      const waitSeconds = Math.ceil((COOLDOWN_MS - (now - lastSent)) / 1000);
+      return res.status(429).json({
+        success: false,
+        message: `Please wait ${waitSeconds}s before requesting another verification email.`,
+        retryAfterSeconds: waitSeconds
+      });
+    }
+
+    const userRecord = await User.findOne({ email: normalizedEmail }).select('+verificationToken +verificationTokenExpires');
+    if (!userRecord) {
+      return res.status(404).json({
+        success: false,
+        message: 'No account found with this email address. Please sign up.'
+      });
+    }
+
+    if (userRecord.emailVerified) {
+      return res.status(400).json({
+        success: false,
+        code: 'ALREADY_VERIFIED',
+        message: 'This email address is already verified. You can log in directly.'
+      });
+    }
+
+    // Generate new secure 32-byte hex token with 3-minute expiry
+    const newToken = crypto.randomBytes(32).toString('hex');
+    userRecord.verificationToken = newToken;
+    userRecord.verificationTokenExpires = new Date(now + 3 * 60 * 1000); // 3 minutes
+    await userRecord.save();
+
+    resendEmailCooldown.set(normalizedEmail, now);
+
+    const clientBaseUrl = resolveClientBaseUrl(req);
+    const verificationLink = `${clientBaseUrl}/verify-email?token=${newToken}`;
+
+    await sendVerificationLinkEmail({
+      to: normalizedEmail,
+      token: newToken,
+      verificationLink
+    });
+
+    return res.json({
+      success: true,
+      message: `A new verification link has been sent to ${normalizedEmail}. It will expire in 3 minutes.`,
+      email: normalizedEmail,
+      expiresInSeconds: 180,
+      verificationLink: process.env.NODE_ENV !== 'production' ? verificationLink : undefined
+    });
+  } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -633,6 +810,16 @@ export const login = async (req, res) => {
     const userRecord = await User.findOne({ email: normalizedEmail }).select('+passwordHash');
     if (!userRecord || !userRecord.passwordHash || !(await bcrypt.compare(String(password), userRecord.passwordHash))) {
       return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    }
+
+    // Restrict unverified users from logging in
+    if (userRecord.emailVerified === false) {
+      return res.status(403).json({
+        success: false,
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Your email address has not been verified yet. Please check your inbox for the verification link (valid for 3 minutes) or request a new one.',
+        email: userRecord.email
+      });
     }
 
     const configuredAdminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
@@ -928,7 +1115,8 @@ export const googleAuth = async (req, res) => {
         email: normalizedEmail,
         passwordHash: randomPassword,
         role: 'member',
-        verified: true
+        verified: true,
+        emailVerified: true
       });
 
       await Wallet.create({
@@ -936,8 +1124,16 @@ export const googleAuth = async (req, res) => {
         balances: { VEs: 500, SVEs: 1500, Tokens: 3000 }
       });
     } else {
+      let shouldSave = false;
       if (!userRecord.verified) {
         userRecord.verified = true;
+        shouldSave = true;
+      }
+      if (!userRecord.emailVerified) {
+        userRecord.emailVerified = true;
+        shouldSave = true;
+      }
+      if (shouldSave) {
         await userRecord.save();
       }
     }

@@ -9,8 +9,8 @@ const ensureDemoUser = async () => {
   await User.updateOne(
     { email: 'test@example.com' },
     {
-      $set: { phone: '+919876543210' },
-      $setOnInsert: { externalId: 'demo-user-1', name: 'Alex Morgan', email: 'test@example.com', passwordHash, role: 'member', verified: true }
+      $set: { phone: '+919876543210', emailVerified: true, verified: true },
+      $setOnInsert: { externalId: 'demo-user-1', name: 'Alex Morgan', email: 'test@example.com', passwordHash, role: 'member' }
     },
     { upsert: true }
   );
@@ -25,8 +25,8 @@ const ensureDemoUser = async () => {
   await User.updateOne(
     { email: adminEmail },
     {
-      $set: { phone: '+919999988888' },
-      $setOnInsert: { externalId: 'demo-admin-1', name: 'VELOOP Admin', email: adminEmail, passwordHash: adminPasswordHash, role: 'admin', verified: true }
+      $set: { phone: '+919999988888', emailVerified: true, verified: true },
+      $setOnInsert: { externalId: 'demo-admin-1', name: 'VELOOP Admin', email: adminEmail, passwordHash: adminPasswordHash, role: 'admin' }
     },
     { upsert: true }
   );
