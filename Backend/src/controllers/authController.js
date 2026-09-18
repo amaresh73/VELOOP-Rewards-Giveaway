@@ -6,6 +6,8 @@ import User from '../models/User.js';
 import Wallet from '../models/Wallet.js';
 import GiveawayParticipation from '../models/GiveawayParticipation.js';
 import PrizeClaim from '../models/PrizeClaim.js';
+import GiveawayWinner from '../models/GiveawayWinner.js';
+import Giveaway from '../models/Giveaway.js';
 import AuditLog from '../models/AuditLog.js';
 import { sendOtpEmail, sendVerificationLinkEmail } from '../services/emailService.js';
 import { sendSmsOtp } from '../services/smsService.js';
@@ -1099,6 +1101,258 @@ export const redeemPromoCode = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/auth/my-winning-rewards
+ * Fetches user's won giveaways and available physical gifts / voucher cards for 4-day delivery.
+ */
+export const getMyWinningRewards = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    // 1. Fetch won giveaways
+    const wins = await GiveawayWinner.find({ userId }).sort({ createdAt: -1 }).lean();
+    const giveawayIds = wins.map((w) => w.giveawayId);
+    const giveaways = await Giveaway.find({ _id: { $in: giveawayIds } }).lean();
+    const giveawayMap = new Map(giveaways.map((g) => [String(g._id), g]));
+
+    const wonPrizes = wins.map((w) => {
+      const g = giveawayMap.get(String(w.giveawayId));
+      return {
+        id: w._id,
+        giveawayId: w.giveawayId,
+        giveawayTitle: g?.title || 'Giveaway Grand Prize',
+        prizeTitle: g?.prizeConfig?.title || g?.title || 'Exclusive Reward Item',
+        type: g?.prizeConfig?.type || 'physical',
+        status: w.status || 'selected',
+        wonAt: w.createdAt
+      };
+    });
+
+    // 2. Fetch user's active claims / shipments
+    const claims = await PrizeClaim.find({ userId }).sort({ createdAt: -1 }).lean();
+
+    // 3. Available winning rewards catalog: ONLY Physical Gifts & Vouchers/Cards
+    const catalog = {
+      gifts: [
+        {
+          id: 'gift-iphone-15',
+          title: 'Apple iPhone 15 Pro (128GB)',
+          category: 'Physical Gift',
+          icon: '📱',
+          deliveryDays: 4,
+          badge: 'Top Reward',
+          description: 'Factory sealed in box. Dispatched with priority express air courier to your address.'
+        },
+        {
+          id: 'gift-macbook-air',
+          title: 'MacBook Air M2 Space Gray',
+          category: 'Physical Gift',
+          icon: '💻',
+          deliveryDays: 4,
+          badge: 'Pro Reward',
+          description: 'Apple Silicon M2, 13.6-inch Liquid Retina display. Delivered in 4 days.'
+        },
+        {
+          id: 'gift-sony-anc',
+          title: 'Sony Wireless ANC Noise Cancelling Earbuds',
+          category: 'Physical Gift',
+          icon: '🎧',
+          deliveryDays: 4,
+          badge: 'Popular',
+          description: 'Premium active noise cancellation & 24h battery life. Doorstep delivery.'
+        },
+        {
+          id: 'gift-smart-watch',
+          title: 'Smart Watch Fitness Series 9',
+          category: 'Physical Gift',
+          icon: '⌚',
+          deliveryDays: 4,
+          badge: 'Fitness',
+          description: 'AMOLED display, 24/7 biometric tracking, 5ATM waterproof.'
+        },
+        {
+          id: 'gift-tech-hamper',
+          title: 'VELOOP VIP Tech Hamper & Merch Box',
+          category: 'Physical Gift',
+          icon: '🎁',
+          deliveryDays: 4,
+          badge: 'Exclusive',
+          description: 'Official VELOOP hoodie, stainless thermal bottle, 20000mAh power bank & stickers.'
+        }
+      ],
+      vouchers: [
+        {
+          id: 'voucher-amazon-5000',
+          title: 'Amazon Shopping Gift Card (₹5,000 / $100)',
+          category: 'Gift Voucher Card',
+          icon: '🛒',
+          deliveryDays: 4,
+          badge: 'Instant / Physical Card',
+          description: 'Physical gift card delivered to your postal address in 4 days with scratch code.'
+        },
+        {
+          id: 'voucher-apple-2500',
+          title: 'Apple App Store & iTunes Gift Card ($50 / ₹4,000)',
+          category: 'Gift Voucher Card',
+          icon: '🍏',
+          deliveryDays: 4,
+          badge: 'Digital / Physical Card',
+          description: 'Redeemable for Apple devices, App Store apps, subscriptions, and games.'
+        },
+        {
+          id: 'voucher-flipkart-5000',
+          title: 'Flipkart Super Shopping Voucher (₹5,000)',
+          category: 'Gift Voucher Card',
+          icon: '🛍️',
+          deliveryDays: 4,
+          badge: 'Physical Gift Card',
+          description: 'Physical shopping gift voucher delivered directly to your doorstep in 4 days.'
+        },
+        {
+          id: 'voucher-steam-3000',
+          title: 'Steam Gaming Wallet Gift Card ($50)',
+          category: 'Gift Voucher Card',
+          icon: '🎮',
+          deliveryDays: 4,
+          badge: 'Gaming Card',
+          description: 'Redeemable on Steam store for any games, DLCs, or hardware.'
+        },
+        {
+          id: 'voucher-gplay-2000',
+          title: 'Google Play Store Digital Voucher Card ($25 / ₹2,000)',
+          category: 'Gift Voucher Card',
+          icon: '📱',
+          deliveryDays: 4,
+          badge: 'Gift Card',
+          description: 'Delivered in a secure card envelope within 4 business days.'
+        }
+      ]
+    };
+
+    return res.json({
+      success: true,
+      data: {
+        wonPrizes,
+        claims,
+        catalog
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * POST /api/auth/deliver-reward
+ * Place delivery for winning physical gifts or voucher cards without coin/money deductions.
+ */
+export const deliverWinningReward = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Please log in to deliver your rewards.' });
+    }
+
+    const {
+      rewardTitle,
+      rewardType = 'PHYSICAL_GIFT', // 'PHYSICAL_GIFT' or 'GIFT_VOUCHER'
+      shippingAddress
+    } = req.body;
+
+    if (!rewardTitle || !String(rewardTitle).trim()) {
+      return res.status(400).json({ success: false, message: 'Please select a winning reward gift or voucher card to deliver.' });
+    }
+
+    // Validate complete shipping address
+    if (
+      !shippingAddress ||
+      !shippingAddress.recipientName ||
+      !shippingAddress.phone ||
+      !shippingAddress.address ||
+      !shippingAddress.city ||
+      !shippingAddress.state ||
+      !shippingAddress.pin
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Complete shipping address (Full Name, Phone, Street Address, City, State, and PIN Code) is required for 4-day delivery.'
+      });
+    }
+
+    const fullAddr = `${shippingAddress.address}, ${shippingAddress.city}, ${shippingAddress.state} - ${shippingAddress.pin}`;
+    const trackingNumber = `DEL-${Date.now().toString(36).toUpperCase()}-4D`;
+    const expectedDeliveryDate = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000); // 4 business days
+
+    // Generate secure voucher card code if voucher/card
+    const isVoucher = rewardType === 'GIFT_VOUCHER' || rewardType === 'gift-card' || rewardTitle.toLowerCase().includes('voucher') || rewardTitle.toLowerCase().includes('card');
+    const voucherCode = isVoucher
+      ? `VLP-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+      : undefined;
+
+    const claim = await PrizeClaim.create({
+      userId,
+      giveawayId: new mongoose.Types.ObjectId(),
+      type: isVoucher ? 'gift-card' : 'physical',
+      status: 'approved',
+      name: shippingAddress.recipientName,
+      phone: shippingAddress.phone,
+      address: shippingAddress.address,
+      city: shippingAddress.city,
+      state: shippingAddress.state,
+      pin: shippingAddress.pin,
+      shippingAddress: fullAddr,
+      metadata: {
+        rewardTitle,
+        rewardType: isVoucher ? 'GIFT_VOUCHER' : 'PHYSICAL_GIFT',
+        voucherCode,
+        deliveryWindow: 'Guaranteed 4 business days',
+        trackingNumber,
+        expectedDeliveryDate: expectedDeliveryDate.toISOString(),
+        dispatchedAt: new Date().toISOString()
+      }
+    });
+
+    await AuditLog.create({
+      entityType: 'PrizeClaim',
+      entityId: trackingNumber,
+      action: 'WINNING_REWARD_DELIVERY_PLACED',
+      performedBy: userId,
+      userId,
+      amount: 0,
+      currency: 'WINNING_REWARD',
+      result: 'SUCCESS',
+      requestId: req.headers['x-request-id'] || `delivery-${Date.now()}`,
+      metadata: {
+        rewardTitle,
+        rewardType: isVoucher ? 'GIFT_VOUCHER' : 'PHYSICAL_GIFT',
+        trackingNumber,
+        deliveryWindow: '4 business days',
+        shippingAddress: fullAddr,
+        voucherCode
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: `Your winning reward "${rewardTitle}" has been placed for delivery! Dispatched to your address and guaranteed delivered within 4 days.`,
+      trackingNumber,
+      expectedDeliveryDate: expectedDeliveryDate.toISOString(),
+      rewardTitle,
+      rewardType: isVoucher ? 'GIFT_VOUCHER' : 'PHYSICAL_GIFT',
+      voucherCode,
+      deliveryDays: 4,
+      shippingAddress: fullAddr,
+      recipientName: shippingAddress.recipientName,
+      phone: shippingAddress.phone
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const requestWithdrawal = async (req, res) => {
   try {
     const userId = req.user?.id || req.user?._id;
@@ -1108,62 +1362,69 @@ export const requestWithdrawal = async (req, res) => {
 
     const {
       currency = 'VEs',
-      amount,
-      withdrawalType = 'MONEY', // 'PHYSICAL_GIFT' or 'MONEY'
+      amount = 0,
+      withdrawalType = 'PHYSICAL_GIFT', // 'PHYSICAL_GIFT', 'GIFT_VOUCHER', or 'MONEY'
       giftItem,
+      rewardTitle,
       shippingAddress,
       payoutMethod = 'UPI',
       destination
     } = req.body;
 
+    const resolvedItem = rewardTitle || giftItem;
     const numAmount = Number(amount);
-    if (!numAmount || numAmount <= 0) {
-      return res.status(400).json({ success: false, message: 'Please enter a valid amount greater than 0.' });
-    }
 
-    // If Physical Gift delivery, validate complete shipping address
-    if (withdrawalType === 'PHYSICAL_GIFT') {
-      if (!shippingAddress || !shippingAddress.recipientName || !shippingAddress.address || !shippingAddress.city || !shippingAddress.state || !shippingAddress.pin || !shippingAddress.phone) {
+    // If Physical Gift or Gift Voucher delivery
+    if (withdrawalType === 'PHYSICAL_GIFT' || withdrawalType === 'GIFT_VOUCHER') {
+      if (
+        !shippingAddress ||
+        !shippingAddress.recipientName ||
+        !shippingAddress.address ||
+        !shippingAddress.city ||
+        !shippingAddress.state ||
+        !shippingAddress.pin ||
+        !shippingAddress.phone
+      ) {
         return res.status(400).json({
           success: false,
           message: 'Complete shipping address (Full Name, Phone, Street Address, City, State, and PIN Code) is required for gift delivery.'
         });
       }
-    } else {
-      if (!destination || !String(destination).trim()) {
-        return res.status(400).json({ success: false, message: 'Payout method and destination details are required.' });
+
+      // If amount > 0, deduct wallet points if requested; if 0 or winning reward, deliver without balance deduction
+      let updatedWalletBalances;
+      if (numAmount > 0) {
+        const wallet = await Wallet.findOne({ userId });
+        const currentBalance = wallet?.balances?.[currency] || 0;
+        if (currentBalance < numAmount) {
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient ${currency} balance. Available: ${currentBalance}, requested: ${numAmount}.`
+          });
+        }
+        const updatedWallet = await Wallet.findOneAndUpdate(
+          { userId, [`balances.${currency}`]: { $gte: numAmount } },
+          { $inc: { [`balances.${currency}`]: -numAmount } },
+          { new: true }
+        ).lean();
+        if (!updatedWallet) {
+          return res.status(400).json({ success: false, message: 'Withdrawal failed. Balance changed or insufficient.' });
+        }
+        updatedWalletBalances = updatedWallet.balances;
       }
-    }
 
-    const wallet = await Wallet.findOne({ userId });
-    const currentBalance = wallet?.balances?.[currency] || 0;
-
-    if (currentBalance < numAmount) {
-      return res.status(400).json({
-        success: false,
-        message: `Insufficient ${currency} balance. Available: ${currentBalance}, requested: ${numAmount}.`
-      });
-    }
-
-    const updatedWallet = await Wallet.findOneAndUpdate(
-      { userId, [`balances.${currency}`]: { $gte: numAmount } },
-      { $inc: { [`balances.${currency}`]: -numAmount } },
-      { new: true }
-    ).lean();
-
-    if (!updatedWallet) {
-      return res.status(400).json({ success: false, message: 'Withdrawal failed. Balance changed or insufficient.' });
-    }
-
-    const trackingNumber = `DEL-${Date.now().toString(36).toUpperCase()}-4D`;
-    const expectedDeliveryDate = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000); // 4 business days
-
-    if (withdrawalType === 'PHYSICAL_GIFT') {
       const fullAddr = `${shippingAddress.address}, ${shippingAddress.city}, ${shippingAddress.state} - ${shippingAddress.pin}`;
+      const trackingNumber = `DEL-${Date.now().toString(36).toUpperCase()}-4D`;
+      const expectedDeliveryDate = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000); // 4 business days
+      const isVoucher = withdrawalType === 'GIFT_VOUCHER' || (resolvedItem && (resolvedItem.toLowerCase().includes('voucher') || resolvedItem.toLowerCase().includes('card')));
+      const voucherCode = isVoucher
+        ? `VLP-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+        : undefined;
+
       await PrizeClaim.create({
         userId,
         giveawayId: new mongoose.Types.ObjectId(),
-        type: 'physical',
+        type: isVoucher ? 'gift-card' : 'physical',
         status: 'approved',
         name: shippingAddress.recipientName,
         phone: shippingAddress.phone,
@@ -1173,7 +1434,10 @@ export const requestWithdrawal = async (req, res) => {
         pin: shippingAddress.pin,
         shippingAddress: fullAddr,
         metadata: {
-          giftItem: giftItem || 'Exclusive VELOOP Reward Gift',
+          giftItem: resolvedItem || 'Exclusive VELOOP Reward Gift',
+          rewardTitle: resolvedItem || 'Exclusive VELOOP Reward Gift',
+          rewardType: isVoucher ? 'GIFT_VOUCHER' : 'PHYSICAL_GIFT',
+          voucherCode,
           deliveryWindow: 'Within 4 days guaranteed',
           trackingNumber,
           expectedDeliveryDate: expectedDeliveryDate.toISOString(),
@@ -1192,27 +1456,57 @@ export const requestWithdrawal = async (req, res) => {
         result: 'SUCCESS',
         requestId: req.headers['x-request-id'] || `gift-${Date.now()}`,
         metadata: {
-          giftItem: giftItem || 'Physical Reward Gift',
+          giftItem: resolvedItem || 'Physical Reward Gift',
           trackingNumber,
           deliveryWindow: '4 business days',
-          shippingAddress: fullAddr
+          shippingAddress: fullAddr,
+          voucherCode
         }
       });
 
       return res.json({
         success: true,
-        withdrawalType: 'PHYSICAL_GIFT',
-        message: `Your physical gift order for "${giftItem || 'Reward Gift'}" has been placed! Dispatched to your address and guaranteed delivered within 4 days.`,
+        withdrawalType: isVoucher ? 'GIFT_VOUCHER' : 'PHYSICAL_GIFT',
+        message: `Your reward order for "${resolvedItem || 'Reward Gift'}" has been placed! Dispatched to your address and guaranteed delivered within 4 days.`,
         trackingNumber,
         expectedDeliveryDate: expectedDeliveryDate.toISOString(),
-        giftItem: giftItem || 'Reward Gift',
+        giftItem: resolvedItem || 'Reward Gift',
+        rewardTitle: resolvedItem || 'Reward Gift',
+        voucherCode,
         deliveryDays: 4,
         shippingAddress: fullAddr,
-        balances: updatedWallet.balances
+        balances: updatedWalletBalances
       });
     }
 
     // Standard Monetary Payout
+    if (!numAmount || numAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid amount greater than 0.' });
+    }
+
+    if (!destination || !String(destination).trim()) {
+      return res.status(400).json({ success: false, message: 'Payout method and destination details are required.' });
+    }
+
+    const wallet = await Wallet.findOne({ userId });
+    const currentBalance = wallet?.balances?.[currency] || 0;
+    if (currentBalance < numAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient ${currency} balance. Available: ${currentBalance}, requested: ${numAmount}.`
+      });
+    }
+
+    const updatedWallet = await Wallet.findOneAndUpdate(
+      { userId, [`balances.${currency}`]: { $gte: numAmount } },
+      { $inc: { [`balances.${currency}`]: -numAmount } },
+      { new: true }
+    ).lean();
+
+    if (!updatedWallet) {
+      return res.status(400).json({ success: false, message: 'Withdrawal failed. Balance changed or insufficient.' });
+    }
+
     await AuditLog.create({
       entityType: 'Wallet',
       entityId: String(userId),

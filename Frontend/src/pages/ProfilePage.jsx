@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Container, Row, Col, Form, Button, Alert, Modal, Badge } from 'react-bootstrap';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -19,23 +19,23 @@ function ProfilePage() {
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  // Delete modal state
+  // Delete account state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
-  // Redeem code & Withdraw modal states
+  // Redeem code & Deliver Winning Rewards modal states
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const [withdrawType, setWithdrawType] = useState('PHYSICAL_GIFT');
+  const [rewardCategory, setRewardCategory] = useState('PHYSICAL_GIFT'); // 'PHYSICAL_GIFT' or 'GIFT_VOUCHER'
+  const [selectedReward, setSelectedReward] = useState({
+    title: 'Apple iPhone 15 Pro (128GB)',
+    type: 'PHYSICAL_GIFT',
+    icon: '📱'
+  });
   const [orderReceipt, setOrderReceipt] = useState(null);
-  const [withdrawData, setWithdrawData] = useState({
-    currency: 'VEs',
-    amount: '500',
-    giftItem: 'VELOOP VIP Tech Hamper & Merch Box',
-    payoutMethod: 'UPI',
-    destination: '',
+  const [shippingData, setShippingData] = useState({
     recipientName: '',
     phone: '',
     address: '',
@@ -43,9 +43,41 @@ function ProfilePage() {
     state: '',
     pin: ''
   });
+  const [winningRewardsData, setWinningRewardsData] = useState({
+    wonPrizes: [],
+    claims: []
+  });
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawSuccess, setWithdrawSuccess] = useState('');
   const [withdrawError, setWithdrawError] = useState('');
+
+  // Fetch winning rewards and won prizes on login
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const fetchWinnings = async () => {
+      try {
+        const res = await api.get('/auth/my-winning-rewards');
+        if (res.data?.data) {
+          setWinningRewardsData(res.data.data);
+          if (res.data.data.wonPrizes && res.data.data.wonPrizes.length > 0) {
+            const firstWin = res.data.data.wonPrizes[0];
+            setSelectedReward({
+              title: firstWin.prizeTitle || firstWin.giveawayTitle,
+              type: firstWin.type === 'gift-card' ? 'GIFT_VOUCHER' : 'PHYSICAL_GIFT',
+              icon: firstWin.type === 'gift-card' ? '🎟️' : '🎁',
+              isWonPrize: true
+            });
+            if (firstWin.type === 'gift-card') {
+              setRewardCategory('GIFT_VOUCHER');
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load winning rewards:', err.message);
+      }
+    };
+    fetchWinnings();
+  }, [isLoggedIn]);
 
   // Route protection
   if (!isLoggedIn) {
@@ -189,15 +221,16 @@ function ProfilePage() {
                     setWithdrawSuccess('');
                     setWithdrawError('');
                     setOrderReceipt(null);
-                    setWithdrawData((prev) => ({
+                    setShippingData((prev) => ({
                       ...prev,
                       recipientName: user?.name || prev.recipientName || '',
                       phone: user?.phone || prev.phone || ''
                     }));
                     setShowWithdrawModal(true);
                   }}
+                  id="deliver-winning-rewards-btn"
                 >
-                  <span>🎁</span> Withdraw Gifts & Cash
+                  <span>🎁</span> Deliver Winning Rewards
                 </Button>
               </div>
             </div>
@@ -374,11 +407,11 @@ function ProfilePage() {
         onHide={() => setShowCodeModal(false)}
       />
 
-      {/* Withdraw Rewards & Physical Gifts Modal */}
+      {/* Deliver Winning Rewards Modal (Physical Gifts & Vouchers/Cards Only) */}
       <Modal show={showWithdrawModal} onHide={() => setShowWithdrawModal(false)} centered size="lg">
         <Modal.Header closeButton style={{ background: 'rgba(15, 20, 36, 0.98)', borderColor: 'rgba(140, 120, 255, 0.2)' }}>
           <Modal.Title className="d-flex align-items-center gap-2 text-white">
-            <span>🎁</span> Withdraw Rewards & Physical Gifts
+            <span>🎁</span> Deliver Your Winning Rewards
           </Modal.Title>
         </Modal.Header>
         <Modal.Body style={{ background: 'rgba(15, 20, 36, 0.98)', color: '#edf2ff' }} className="p-4">
@@ -400,9 +433,9 @@ function ProfilePage() {
               <Badge bg="success" className="px-3 py-1 mb-2 text-uppercase fw-bold letter-spacing-1">
                 ✓ Order Confirmed • Delivered in 4 Days
               </Badge>
-              <h3 className="fw-bold text-white mb-2">Your Gift Is On The Way!</h3>
+              <h3 className="fw-bold text-white mb-2">Your Reward Is On The Way!</h3>
               <p className="text-white-50 small mb-4">
-                Your order for <strong>{orderReceipt.giftItem}</strong> has been confirmed and dispatched for express delivery to your address.
+                Your winning reward <strong>"{orderReceipt.rewardTitle || orderReceipt.giftItem}"</strong> has been confirmed and dispatched for express courier delivery to your address.
               </p>
 
               <div className="p-3 mb-4 rounded-3 text-start mx-auto" style={{ maxWidth: 520, background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
@@ -420,10 +453,18 @@ function ProfilePage() {
                     {new Date(orderReceipt.expectedDeliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </strong>
                 </div>
+                {orderReceipt.voucherCode && (
+                  <div className="d-flex justify-content-between align-items-center pb-2 mb-2 border-bottom border-secondary border-opacity-25">
+                    <span className="text-white-50 small">Voucher / Card Code:</span>
+                    <Badge bg="warning" text="dark" className="font-monospace fs-6 px-2 py-1">
+                      {orderReceipt.voucherCode}
+                    </Badge>
+                  </div>
+                )}
                 <div>
                   <span className="text-white-50 small d-block mb-1">Delivering To:</span>
                   <div className="small text-white p-2 rounded bg-black bg-opacity-40 border border-secondary border-opacity-25">
-                    <strong>{withdrawData.recipientName}</strong> ({withdrawData.phone})<br />
+                    <strong>{orderReceipt.recipientName || shippingData.recipientName}</strong> ({orderReceipt.phone || shippingData.phone})<br />
                     {orderReceipt.shippingAddress}
                   </div>
                 </div>
@@ -441,17 +482,22 @@ function ProfilePage() {
             </div>
           ) : (
             <>
-              {/* Category Selector Tabs */}
+              {/* Category Selector Tabs: ONLY Physical Gifts & Vouchers/Cards */}
               <div className="bg-dark p-1 rounded-3 mb-3 border border-secondary border-opacity-50 d-flex">
                 <button
                   type="button"
                   className={`btn flex-fill py-2 text-center small fw-bold rounded-2 border-0 ${
-                    withdrawType === 'PHYSICAL_GIFT' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
+                    rewardCategory === 'PHYSICAL_GIFT' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
                   }`}
                   onClick={() => {
-                    setWithdrawType('PHYSICAL_GIFT');
+                    setRewardCategory('PHYSICAL_GIFT');
                     setWithdrawError('');
                     setWithdrawSuccess('');
+                    setSelectedReward({
+                      title: 'Apple iPhone 15 Pro (128GB)',
+                      type: 'PHYSICAL_GIFT',
+                      icon: '📱'
+                    });
                   }}
                   id="tab-physical-gift"
                 >
@@ -460,16 +506,21 @@ function ProfilePage() {
                 <button
                   type="button"
                   className={`btn flex-fill py-2 text-center small fw-bold rounded-2 border-0 ${
-                    withdrawType === 'MONEY' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
+                    rewardCategory === 'GIFT_VOUCHER' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
                   }`}
                   onClick={() => {
-                    setWithdrawType('MONEY');
+                    setRewardCategory('GIFT_VOUCHER');
                     setWithdrawError('');
                     setWithdrawSuccess('');
+                    setSelectedReward({
+                      title: 'Amazon Shopping Gift Card (₹5,000 / $100)',
+                      type: 'GIFT_VOUCHER',
+                      icon: '🛒'
+                    });
                   }}
-                  id="tab-money-payout"
+                  id="tab-gift-voucher"
                 >
-                  💳 Money / Digital Payout
+                  🎟️ Gift Vouchers & Cards (Delivered in 4 Days)
                 </button>
               </div>
 
@@ -492,315 +543,281 @@ function ProfilePage() {
                 setWithdrawError('');
                 setWithdrawSuccess('');
 
-                const numAmount = Number(withdrawData.amount);
-                const available = Number(balances[withdrawData.currency] || 0);
-
-                if (!numAmount || numAmount <= 0) {
-                  setWithdrawError('Please enter an amount greater than 0.');
+                const { recipientName, phone, address, city, state, pin } = shippingData;
+                if (!recipientName.trim() || !phone.trim() || !address.trim() || !city.trim() || !state.trim() || !pin.trim()) {
+                  setWithdrawError('Please fill in all shipping address fields (Full Name, Phone, Street, City, State, and PIN code) to deliver your reward.');
                   return;
-                }
-
-                if (numAmount > available) {
-                  setWithdrawError(`Insufficient ${withdrawData.currency} balance. Available: ${available.toLocaleString()}`);
-                  return;
-                }
-
-                if (withdrawType === 'PHYSICAL_GIFT') {
-                  const { recipientName, phone, address, city, state, pin } = withdrawData;
-                  if (!recipientName.trim() || !phone.trim() || !address.trim() || !city.trim() || !state.trim() || !pin.trim()) {
-                    setWithdrawError('Please fill in all shipping address fields (Full Name, Phone, Street, City, State, and PIN code).');
-                    return;
-                  }
-                } else {
-                  if (!withdrawData.destination.trim()) {
-                    setWithdrawError('Please enter your payout destination details.');
-                    return;
-                  }
                 }
 
                 setWithdrawLoading(true);
                 try {
                   const payload = {
-                    withdrawalType: withdrawType,
-                    currency: withdrawData.currency,
-                    amount: numAmount
+                    rewardTitle: selectedReward.title,
+                    rewardType: rewardCategory,
+                    shippingAddress: {
+                      recipientName: recipientName.trim(),
+                      phone: phone.trim(),
+                      address: address.trim(),
+                      city: city.trim(),
+                      state: state.trim(),
+                      pin: pin.trim()
+                    }
                   };
 
-                  if (withdrawType === 'PHYSICAL_GIFT') {
-                    payload.giftItem = withdrawData.giftItem;
-                    payload.shippingAddress = {
-                      recipientName: withdrawData.recipientName.trim(),
-                      phone: withdrawData.phone.trim(),
-                      address: withdrawData.address.trim(),
-                      city: withdrawData.city.trim(),
-                      state: withdrawData.state.trim(),
-                      pin: withdrawData.pin.trim()
-                    };
-                  } else {
-                    payload.payoutMethod = withdrawData.payoutMethod;
-                    payload.destination = withdrawData.destination.trim();
-                  }
+                  const res = await api.post('/auth/deliver-reward', payload);
 
-                  const res = await api.post('/auth/withdraw', payload);
-
-                  if (res.data?.balances && user) {
-                    const updatedUser = {
-                      ...user,
-                      balances: res.data.balances,
-                      points: res.data.balances.VEs
-                    };
-                    setUser(updatedUser);
-                    localStorage.setItem('veloop-user', JSON.stringify(updatedUser));
-                  }
-
-                  if (withdrawType === 'PHYSICAL_GIFT' && res.data?.trackingNumber) {
+                  if (res.data?.trackingNumber) {
                     setOrderReceipt({
-                      giftItem: res.data.giftItem || withdrawData.giftItem,
+                      rewardTitle: res.data.rewardTitle || selectedReward.title,
+                      rewardType: res.data.rewardType || rewardCategory,
                       trackingNumber: res.data.trackingNumber,
                       expectedDeliveryDate: res.data.expectedDeliveryDate,
-                      shippingAddress: res.data.shippingAddress
+                      voucherCode: res.data.voucherCode,
+                      shippingAddress: res.data.shippingAddress,
+                      recipientName: res.data.recipientName || recipientName,
+                      phone: res.data.phone || phone
                     });
                   } else {
-                    setWithdrawSuccess(res.data?.message || `Withdrawal of ${numAmount} ${withdrawData.currency} submitted successfully!`);
+                    setWithdrawSuccess(res.data?.message || 'Your winning reward delivery has been placed!');
                     setTimeout(() => setShowWithdrawModal(false), 2000);
                   }
                 } catch (err) {
-                  setWithdrawError(err.response?.data?.message || 'Withdrawal failed. Please check your balance and details.');
+                  setWithdrawError(err.response?.data?.message || 'Failed to submit delivery request. Please check your shipping address.');
                 } finally {
                   setWithdrawLoading(false);
                 }
               }}>
 
-                {/* ── OPTION A: PHYSICAL GIFTS DELIVERED WITHIN 4 DAYS ── */}
-                {withdrawType === 'PHYSICAL_GIFT' && (
-                  <>
-                    {/* 4-Day Delivery Guarantee Banner */}
-                    <div className="p-3 mb-3 rounded border border-success border-opacity-40 bg-success bg-opacity-10 d-flex align-items-center gap-3">
-                      <span className="fs-3">🚚</span>
-                      <div>
-                        <strong className="text-success d-block small">Guaranteed 4-Day Home Delivery</strong>
-                        <span className="text-white-50 small" style={{ fontSize: '0.8rem' }}>
-                          Physical gifts are dispatched within 24h via express courier and delivered directly to your doorstep within <strong>4 business days</strong>.
-                        </span>
-                      </div>
+                {/* ── WON GIVEAWAY PRIZES SECTION (IF ANY) ── */}
+                {winningRewardsData.wonPrizes && winningRewardsData.wonPrizes.length > 0 && (
+                  <div className="mb-3 p-3 rounded border border-warning border-opacity-40 bg-warning bg-opacity-10">
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <span className="fs-5">🏆</span>
+                      <strong className="text-warning small">Your Won Giveaway Prizes (Ready for 4-Day Delivery)</strong>
                     </div>
-
-                    {/* Gift Catalog Selection */}
-                    <Form.Group className="mb-3">
-                      <Form.Label className="text-white-50 small fw-bold">Select Physical Reward Gift</Form.Label>
-                      <div className="d-flex flex-column gap-2 mb-2">
-                        {[
-                          { title: 'Apple iPhone 15 Pro (128GB)', cost: 5000, icon: '📱' },
-                          { title: 'MacBook Air M2 Space Gray', cost: 10000, icon: '💻' },
-                          { title: 'Sony Wireless ANC Earbuds', cost: 1000, icon: '🎧' },
-                          { title: 'Smart Watch Fitness Series 9', cost: 1500, icon: '⌚' },
-                          { title: 'VELOOP VIP Tech Hamper & Swag Box', cost: 500, icon: '🎁' }
-                        ].map((gift) => (
-                          <div
-                            key={gift.title}
-                            className={`p-2 px-3 rounded d-flex justify-content-between align-items-center cursor-pointer border ${
-                              withdrawData.giftItem === gift.title
-                                ? 'border-primary bg-primary bg-opacity-20 text-white'
-                                : 'border-secondary border-opacity-25 bg-dark bg-opacity-50 text-white-50'
-                            }`}
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => {
-                              setWithdrawData({
-                                ...withdrawData,
-                                giftItem: gift.title,
-                                amount: String(gift.cost)
-                              });
-                            }}
-                          >
-                            <div className="d-flex align-items-center gap-2">
-                              <span>{gift.icon}</span>
-                              <span className="fw-semibold text-white small">{gift.title}</span>
-                            </div>
-                            <Badge bg={balances.VEs >= gift.cost ? 'success' : 'secondary'} className="px-2 py-1">
-                              {gift.cost.toLocaleString()} VEs
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
-                    </Form.Group>
-
-                    {/* Currency & Amount */}
-                    <Row className="g-2 mb-3">
-                      <Col xs={12} sm={6}>
-                        <Form.Label className="text-white-50 small fw-bold">Currency to Deduct</Form.Label>
-                        <Form.Select
-                          value={withdrawData.currency}
-                          onChange={(e) => setWithdrawData({ ...withdrawData, currency: e.target.value })}
-                          className="bg-dark text-white border-secondary"
+                    <div className="d-flex flex-column gap-2">
+                      {winningRewardsData.wonPrizes.map((win) => (
+                        <div
+                          key={win.id}
+                          className={`p-2 px-3 rounded d-flex justify-content-between align-items-center cursor-pointer border ${
+                            selectedReward.title === (win.prizeTitle || win.giveawayTitle)
+                              ? 'border-warning bg-warning bg-opacity-20 text-white'
+                              : 'border-secondary border-opacity-30 bg-dark bg-opacity-50 text-white-50'
+                          }`}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => {
+                            setSelectedReward({
+                              title: win.prizeTitle || win.giveawayTitle,
+                              type: win.type === 'gift-card' ? 'GIFT_VOUCHER' : 'PHYSICAL_GIFT',
+                              icon: win.type === 'gift-card' ? '🎟️' : '🎁',
+                              isWonPrize: true
+                            });
+                            setRewardCategory(win.type === 'gift-card' ? 'GIFT_VOUCHER' : 'PHYSICAL_GIFT');
+                          }}
                         >
-                          <option value="VEs">💎 VEs (Available: {Number(balances.VEs || 0).toLocaleString()})</option>
-                          <option value="SVEs">⚡ SVEs (Available: {Number(balances.SVEs || 0).toLocaleString()})</option>
-                          <option value="Tokens">🪙 Tokens (Available: {Number(balances.Tokens || 0).toLocaleString()})</option>
-                        </Form.Select>
-                      </Col>
-                      <Col xs={12} sm={6}>
-                        <Form.Label className="text-white-50 small fw-bold">Points Cost</Form.Label>
+                          <div>
+                            <span className="fw-bold text-white small me-2">{win.prizeTitle || win.giveawayTitle}</span>
+                            <span className="text-white-50 small" style={{ fontSize: '0.75rem' }}>({win.giveawayTitle})</span>
+                          </div>
+                          <Badge bg="warning" text="dark" className="fw-bold">
+                            WON PRIZE ✓
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── 4-DAY HOME DELIVERY ASSURANCE BANNER ── */}
+                <div className="p-3 mb-3 rounded border border-success border-opacity-40 bg-success bg-opacity-10 d-flex align-items-center gap-3">
+                  <span className="fs-3">🚚</span>
+                  <div>
+                    <strong className="text-success d-block small">Guaranteed 4-Day Home Delivery to Your Address</strong>
+                    <span className="text-white-50 small" style={{ fontSize: '0.8rem' }}>
+                      All winning reward gifts and voucher cards are dispatched via express courier with full tracking and delivered directly to your doorstep within <strong>4 business days</strong>.
+                    </span>
+                  </div>
+                </div>
+
+                {/* ── TAB A: PHYSICAL GIFTS ── */}
+                {rewardCategory === 'PHYSICAL_GIFT' && (
+                  <Form.Group className="mb-3">
+                    <Form.Label className="text-white-50 small fw-bold">Select Winning Physical Gift to Deliver</Form.Label>
+                    <div className="d-flex flex-column gap-2 mb-2">
+                      {[
+                        { title: 'Apple iPhone 15 Pro (128GB)', icon: '📱', badge: 'Flagship Gift' },
+                        { title: 'MacBook Air M2 Space Gray', icon: '💻', badge: 'Pro Device' },
+                        { title: 'Sony Wireless ANC Earbuds', icon: '🎧', badge: 'Audio Gear' },
+                        { title: 'Smart Watch Fitness Series 9', icon: '⌚', badge: 'Smart Wearable' },
+                        { title: 'VELOOP VIP Tech Hamper & Merch Box', icon: '🎁', badge: 'Exclusive Swag' }
+                      ].map((gift) => (
+                        <div
+                          key={gift.title}
+                          className={`p-2 px-3 rounded d-flex justify-content-between align-items-center cursor-pointer border ${
+                            selectedReward.title === gift.title
+                              ? 'border-primary bg-primary bg-opacity-20 text-white'
+                              : 'border-secondary border-opacity-25 bg-dark bg-opacity-50 text-white-50'
+                          }`}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => {
+                            setSelectedReward({
+                              title: gift.title,
+                              type: 'PHYSICAL_GIFT',
+                              icon: gift.icon
+                            });
+                          }}
+                        >
+                          <div className="d-flex align-items-center gap-2">
+                            <span>{gift.icon}</span>
+                            <span className="fw-semibold text-white small">{gift.title}</span>
+                          </div>
+                          <Badge bg="success" className="px-2 py-1 small">
+                            {gift.badge} • 4-Day Delivery
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </Form.Group>
+                )}
+
+                {/* ── TAB B: GIFT VOUCHERS & CARDS ── */}
+                {rewardCategory === 'GIFT_VOUCHER' && (
+                  <Form.Group className="mb-3">
+                    <Form.Label className="text-white-50 small fw-bold">Select Winning Voucher / Card to Deliver</Form.Label>
+                    <div className="d-flex flex-column gap-2 mb-2">
+                      {[
+                        { title: 'Amazon Shopping Gift Card (₹5,000 / $100)', icon: '🛒', badge: 'Postal Gift Card' },
+                        { title: 'Apple App Store & iTunes Gift Card ($50 / ₹4,000)', icon: '🍏', badge: 'Digital Card' },
+                        { title: 'Flipkart Super Shopping Voucher (₹5,000)', icon: '🛍️', badge: 'Physical Card Mailer' },
+                        { title: 'Steam Gaming Wallet Gift Card ($50)', icon: '🎮', badge: 'Gaming Card' },
+                        { title: 'Google Play Store Digital Voucher Card ($25 / ₹2,000)', icon: '📱', badge: 'App Store Card' }
+                      ].map((voucher) => (
+                        <div
+                          key={voucher.title}
+                          className={`p-2 px-3 rounded d-flex justify-content-between align-items-center cursor-pointer border ${
+                            selectedReward.title === voucher.title
+                              ? 'border-primary bg-primary bg-opacity-20 text-white'
+                              : 'border-secondary border-opacity-25 bg-dark bg-opacity-50 text-white-50'
+                          }`}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => {
+                            setSelectedReward({
+                              title: voucher.title,
+                              type: 'GIFT_VOUCHER',
+                              icon: voucher.icon
+                            });
+                          }}
+                        >
+                          <div className="d-flex align-items-center gap-2">
+                            <span>{voucher.icon}</span>
+                            <span className="fw-semibold text-white small">{voucher.title}</span>
+                          </div>
+                          <Badge bg="info" className="px-2 py-1 small text-dark fw-bold">
+                            {voucher.badge} • 4-Day Delivery
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </Form.Group>
+                )}
+
+                {/* Selected Item Notification */}
+                <div className="p-2 px-3 mb-3 rounded bg-primary bg-opacity-15 border border-primary border-opacity-30 d-flex justify-content-between align-items-center">
+                  <div className="d-flex align-items-center gap-2">
+                    <span>{selectedReward.icon || (rewardCategory === 'GIFT_VOUCHER' ? '🎟️' : '🎁')}</span>
+                    <span className="text-white small fw-bold">Selected to Deliver: {selectedReward.title}</span>
+                  </div>
+                  <Badge bg="success" className="px-2 py-1 small">
+                    Guaranteed in 4 Days
+                  </Badge>
+                </div>
+
+                {/* Complete Shipping Delivery Address Form */}
+                <div className="p-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-30 mb-3">
+                  <h6 className="text-white small fw-bold mb-3 d-flex align-items-center gap-2">
+                    <span>📍</span> Your Address to Deliver (Dispatched for delivery in 4 days)
+                  </h6>
+                  <Row className="g-2">
+                    <Col xs={12} sm={6}>
+                      <Form.Group className="mb-2">
+                        <Form.Label className="text-white-50 small fw-bold mb-1">Recipient Full Name</Form.Label>
                         <Form.Control
-                          type="number"
-                          value={withdrawData.amount}
-                          onChange={(e) => setWithdrawData({ ...withdrawData, amount: e.target.value })}
-                          className="bg-dark text-white border-secondary"
+                          type="text"
+                          placeholder="Full Name"
+                          value={shippingData.recipientName}
+                          onChange={(e) => setShippingData({ ...shippingData, recipientName: e.target.value })}
+                          className="bg-dark text-white border-secondary small"
                           required
                         />
-                      </Col>
-                    </Row>
-
-                    {/* Complete Shipping Delivery Address Form */}
-                    <div className="p-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-30 mb-3">
-                      <h6 className="text-white small fw-bold mb-3 d-flex align-items-center gap-2">
-                        <span>📍</span> Shipping Address (Delivered to this address in 4 days)
-                      </h6>
-                      <Row className="g-2">
-                        <Col xs={12} sm={6}>
-                          <Form.Group className="mb-2">
-                            <Form.Label className="text-white-50 small fw-bold mb-1">Recipient Full Name</Form.Label>
-                            <Form.Control
-                              type="text"
-                              placeholder="Full Name"
-                              value={withdrawData.recipientName}
-                              onChange={(e) => setWithdrawData({ ...withdrawData, recipientName: e.target.value })}
-                              className="bg-dark text-white border-secondary small"
-                              required
-                            />
-                          </Form.Group>
-                        </Col>
-                        <Col xs={12} sm={6}>
-                          <Form.Group className="mb-2">
-                            <Form.Label className="text-white-50 small fw-bold mb-1">Mobile Phone (for courier)</Form.Label>
-                            <Form.Control
-                              type="tel"
-                              placeholder="+91 90000 00000"
-                              value={withdrawData.phone}
-                              onChange={(e) => setWithdrawData({ ...withdrawData, phone: e.target.value })}
-                              className="bg-dark text-white border-secondary small"
-                              required
-                            />
-                          </Form.Group>
-                        </Col>
-                        <Col xs={12}>
-                          <Form.Group className="mb-2">
-                            <Form.Label className="text-white-50 small fw-bold mb-1">Street Address / House / Flat No.</Form.Label>
-                            <Form.Control
-                              type="text"
-                              placeholder="Apartment, Street Name, Landmark"
-                              value={withdrawData.address}
-                              onChange={(e) => setWithdrawData({ ...withdrawData, address: e.target.value })}
-                              className="bg-dark text-white border-secondary small"
-                              required
-                            />
-                          </Form.Group>
-                        </Col>
-                        <Col xs={12} sm={4}>
-                          <Form.Group className="mb-2">
-                            <Form.Label className="text-white-50 small fw-bold mb-1">City</Form.Label>
-                            <Form.Control
-                              type="text"
-                              placeholder="City"
-                              value={withdrawData.city}
-                              onChange={(e) => setWithdrawData({ ...withdrawData, city: e.target.value })}
-                              className="bg-dark text-white border-secondary small"
-                              required
-                            />
-                          </Form.Group>
-                        </Col>
-                        <Col xs={12} sm={4}>
-                          <Form.Group className="mb-2">
-                            <Form.Label className="text-white-50 small fw-bold mb-1">State / Province</Form.Label>
-                            <Form.Control
-                              type="text"
-                              placeholder="State"
-                              value={withdrawData.state}
-                              onChange={(e) => setWithdrawData({ ...withdrawData, state: e.target.value })}
-                              className="bg-dark text-white border-secondary small"
-                              required
-                            />
-                          </Form.Group>
-                        </Col>
-                        <Col xs={12} sm={4}>
-                          <Form.Group className="mb-2">
-                            <Form.Label className="text-white-50 small fw-bold mb-1">PIN / Postal Code</Form.Label>
-                            <Form.Control
-                              type="text"
-                              placeholder="PIN Code"
-                              value={withdrawData.pin}
-                              onChange={(e) => setWithdrawData({ ...withdrawData, pin: e.target.value })}
-                              className="bg-dark text-white border-secondary small"
-                              required
-                            />
-                          </Form.Group>
-                        </Col>
-                      </Row>
-                    </div>
-                  </>
-                )}
-
-                {/* ── OPTION B: MONEY / DIGITAL PAYOUT ── */}
-                {withdrawType === 'MONEY' && (
-                  <>
-                    <Form.Group className="mb-3">
-                      <Form.Label className="text-white-50 small fw-bold">Select Currency</Form.Label>
-                      <Form.Select
-                        value={withdrawData.currency}
-                        onChange={(e) => setWithdrawData({ ...withdrawData, currency: e.target.value })}
-                        className="bg-dark text-white border-secondary"
-                      >
-                        <option value="VEs">💎 VEs (Available: {Number(balances.VEs || 0).toLocaleString()})</option>
-                        <option value="SVEs">⚡ SVEs (Available: {Number(balances.SVEs || 0).toLocaleString()})</option>
-                        <option value="Tokens">🪙 Tokens (Available: {Number(balances.Tokens || 0).toLocaleString()})</option>
-                      </Form.Select>
-                    </Form.Group>
-
-                    <Form.Group className="mb-3">
-                      <Form.Label className="text-white-50 small fw-bold">Amount to Withdraw</Form.Label>
-                      <Form.Control
-                        type="number"
-                        min="1"
-                        max={balances[withdrawData.currency] || 0}
-                        placeholder={`Max: ${balances[withdrawData.currency] || 0}`}
-                        value={withdrawData.amount}
-                        onChange={(e) => setWithdrawData({ ...withdrawData, amount: e.target.value })}
-                        className="bg-dark text-white border-secondary"
-                        required
-                      />
-                    </Form.Group>
-
-                    <Form.Group className="mb-3">
-                      <Form.Label className="text-white-50 small fw-bold">Payout Method</Form.Label>
-                      <Form.Select
-                        value={withdrawData.payoutMethod}
-                        onChange={(e) => setWithdrawData({ ...withdrawData, payoutMethod: e.target.value })}
-                        className="bg-dark text-white border-secondary"
-                      >
-                        <option value="UPI">UPI ID (Instant Bank Transfer)</option>
-                        <option value="Bank">Bank Account (NEFT / IMPS)</option>
-                        <option value="Crypto">Crypto Wallet Address (USDT / Polygon)</option>
-                        <option value="Voucher">Digital Brand Gift Card Voucher</option>
-                      </Form.Select>
-                    </Form.Group>
-
-                    <Form.Group className="mb-4">
-                      <Form.Label className="text-white-50 small fw-bold">
-                        {withdrawData.payoutMethod === 'UPI' ? 'UPI ID (e.g. user@okaxis / user@upi)' :
-                         withdrawData.payoutMethod === 'Bank' ? 'Account Number & IFSC Code' :
-                         withdrawData.payoutMethod === 'Crypto' ? 'Polygon / USDT Wallet Address' :
-                         'Recipient Email for Gift Voucher'}
-                      </Form.Label>
-                      <Form.Control
-                        type="text"
-                        placeholder={withdrawData.payoutMethod === 'UPI' ? 'user@okaxis' : 'Enter payout details'}
-                        value={withdrawData.destination}
-                        onChange={(e) => setWithdrawData({ ...withdrawData, destination: e.target.value })}
-                        className="bg-dark text-white border-secondary"
-                        required
-                      />
-                    </Form.Group>
-                  </>
-                )}
+                      </Form.Group>
+                    </Col>
+                    <Col xs={12} sm={6}>
+                      <Form.Group className="mb-2">
+                        <Form.Label className="text-white-50 small fw-bold mb-1">Mobile Phone (for courier delivery)</Form.Label>
+                        <Form.Control
+                          type="tel"
+                          placeholder="+91 90000 00000"
+                          value={shippingData.phone}
+                          onChange={(e) => setShippingData({ ...shippingData, phone: e.target.value })}
+                          className="bg-dark text-white border-secondary small"
+                          required
+                        />
+                      </Form.Group>
+                    </Col>
+                    <Col xs={12}>
+                      <Form.Group className="mb-2">
+                        <Form.Label className="text-white-50 small fw-bold mb-1">Street Address / House / Flat No.</Form.Label>
+                        <Form.Control
+                          type="text"
+                          placeholder="Apartment, Street Name, Landmark"
+                          value={shippingData.address}
+                          onChange={(e) => setShippingData({ ...shippingData, address: e.target.value })}
+                          className="bg-dark text-white border-secondary small"
+                          required
+                        />
+                      </Form.Group>
+                    </Col>
+                    <Col xs={12} sm={4}>
+                      <Form.Group className="mb-2">
+                        <Form.Label className="text-white-50 small fw-bold mb-1">City</Form.Label>
+                        <Form.Control
+                          type="text"
+                          placeholder="City"
+                          value={shippingData.city}
+                          onChange={(e) => setShippingData({ ...shippingData, city: e.target.value })}
+                          className="bg-dark text-white border-secondary small"
+                          required
+                        />
+                      </Form.Group>
+                    </Col>
+                    <Col xs={12} sm={4}>
+                      <Form.Group className="mb-2">
+                        <Form.Label className="text-white-50 small fw-bold mb-1">State / Province</Form.Label>
+                        <Form.Control
+                          type="text"
+                          placeholder="State"
+                          value={shippingData.state}
+                          onChange={(e) => setShippingData({ ...shippingData, state: e.target.value })}
+                          className="bg-dark text-white border-secondary small"
+                          required
+                        />
+                      </Form.Group>
+                    </Col>
+                    <Col xs={12} sm={4}>
+                      <Form.Group className="mb-2">
+                        <Form.Label className="text-white-50 small fw-bold mb-1">PIN / Postal Code</Form.Label>
+                        <Form.Control
+                          type="text"
+                          placeholder="PIN Code"
+                          value={shippingData.pin}
+                          onChange={(e) => setShippingData({ ...shippingData, pin: e.target.value })}
+                          className="bg-dark text-white border-secondary small"
+                          required
+                        />
+                      </Form.Group>
+                    </Col>
+                  </Row>
+                </div>
 
                 <div className="d-flex justify-content-end gap-2 mt-3">
                   <Button variant="outline-light" size="sm" onClick={() => setShowWithdrawModal(false)}>
@@ -808,15 +825,14 @@ function ProfilePage() {
                   </Button>
                   <Button
                     type="submit"
-                    className="btn-primary-custom"
+                    className="btn-primary-custom px-4 py-2"
                     size="sm"
-                    disabled={withdrawLoading || !withdrawData.amount || Number(withdrawData.amount) <= 0}
+                    disabled={withdrawLoading || !selectedReward.title}
+                    id="confirm-reward-delivery-btn"
                   >
                     {withdrawLoading
-                      ? 'Processing Request...'
-                      : withdrawType === 'PHYSICAL_GIFT'
-                      ? '📦 Order Gift (Deliver in 4 Days) →'
-                      : '💸 Confirm Money Withdrawal →'}
+                      ? 'Dispatching Order...'
+                      : '📦 Confirm 4-Day Delivery to Address →'}
                   </Button>
                 </div>
               </Form>

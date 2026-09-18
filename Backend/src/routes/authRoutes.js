@@ -15,6 +15,8 @@ import {
   resetPassword,
   redeemPromoCode,
   requestWithdrawal,
+  deliverWinningReward,
+  getMyWinningRewards,
   googleAuth
 } from '../controllers/authController.js';
 import { protect } from '../middleware/authMiddleware.js';
@@ -46,5 +48,7 @@ router.put('/change-password', protect, rateLimiter({ max: 10, windowMs: 60_000,
 router.delete('/delete-account', protect, rateLimiter({ max: 5, windowMs: 60_000, message: 'Too many attempts. Please try again later.' }), deleteAccount);
 router.post('/redeem-code', protect, rateLimiter({ max: 10, windowMs: 60_000, message: 'Too many redemption attempts. Please wait.' }), redeemPromoCode);
 router.post('/withdraw', protect, rateLimiter({ max: 5, windowMs: 60_000, message: 'Too many withdrawal attempts. Please wait.' }), requestWithdrawal);
+router.get('/my-winning-rewards', protect, getMyWinningRewards);
+router.post('/deliver-reward', protect, rateLimiter({ max: 10, windowMs: 60_000, message: 'Too many delivery requests. Please wait.' }), deliverWinningReward);
 
 export default router;
