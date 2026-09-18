@@ -1023,33 +1023,24 @@ export const changePassword = async (req, res) => {
 
 export const deleteAccount = async (req, res) => {
   try {
-    const { password } = req.body;
-
-    if (!password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password is required to confirm account deletion.'
-      });
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized request.' });
     }
 
-    const userRecord = await User.findOne({ externalId: req.user.id }).select('+passwordHash');
+    const userRecord = await User.findOne({ externalId: userId });
     if (!userRecord) {
       return res.status(404).json({ success: false, message: 'User account not found.' });
     }
 
-    const isMatch = await bcrypt.compare(String(password), userRecord.passwordHash);
-    if (!isMatch) {
-      return res.status(400).json({ success: false, message: 'Incorrect password. Account deletion aborted.' });
-    }
-
     // Permanently remove user, wallet, and related participation/claim records
-    await User.deleteOne({ externalId: req.user.id });
-    await Wallet.deleteMany({ userId: req.user.id });
+    await User.deleteOne({ externalId: userId });
+    await Wallet.deleteMany({ userId });
     try {
-      await GiveawayParticipation.deleteMany({ userId: req.user.id });
-      await PrizeClaim.deleteMany({ userId: req.user.id });
+      await GiveawayParticipation.deleteMany({ userId });
+      await PrizeClaim.deleteMany({ userId });
     } catch {
-      // ignore secondary errors
+      // ignore secondary cleanup errors
     }
 
     return res.json({

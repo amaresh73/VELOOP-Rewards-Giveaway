@@ -164,10 +164,8 @@ export function AuthProvider({ children }) {
     return response.data;
   };
 
-  const deleteAccount = async (password) => {
-    const response = await api.delete('/auth/delete-account', {
-      data: { password }
-    });
+  const deleteAccount = async () => {
+    const response = await api.delete('/auth/delete-account');
     // Immediately end session upon successful account deletion
     logout();
     return response.data;

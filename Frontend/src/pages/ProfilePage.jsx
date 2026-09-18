@@ -91,17 +91,11 @@ function ProfilePage() {
   };
 
   const confirmAccountDeletion = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setDeleteError('');
-
-    if (!deletePassword) {
-      setDeleteError('Please enter your password to confirm deletion.');
-      return;
-    }
-
     setDeleteLoading(true);
     try {
-      await deleteAccount(deletePassword);
+      await deleteAccount();
       setShowDeleteModal(false);
       navigate('/login', {
         state: {
@@ -110,7 +104,7 @@ function ProfilePage() {
         }
       });
     } catch (err) {
-      const msg = err.response?.data?.message || 'Incorrect password. Account deletion aborted.';
+      const msg = err.response?.data?.message || 'Failed to delete account. Please try again.';
       setDeleteError(msg);
     } finally {
       setDeleteLoading(false);
@@ -323,9 +317,12 @@ function ProfilePage() {
         </Modal.Header>
         <Form onSubmit={confirmAccountDeletion}>
           <Modal.Body>
-            <p className="small text-white-50 mb-3">
-              Are you sure you want to permanently delete your account (<strong>{user?.email}</strong>)? All your balances, entries, and rewards will be immediately purged from our servers.
-            </p>
+            <div className="p-3 rounded bg-danger bg-opacity-10 border border-danger border-opacity-25 mb-3">
+              <strong className="text-danger d-block mb-1">Warning: Irreversible Action</strong>
+              <p className="small text-white-50 mb-0">
+                Are you sure you want to permanently delete your account (<strong>{user?.email || user?.phone || user?.name}</strong>)? All your balances, entries, and rewards will be permanently erased.
+              </p>
+            </div>
 
             {deleteError && (
               <Alert variant="danger" className="py-2 px-3 small d-flex align-items-center gap-2 mb-3">
@@ -333,29 +330,10 @@ function ProfilePage() {
                 <div>{deleteError}</div>
               </Alert>
             )}
-
-            <Form.Group controlId="delete-account-password" className="mb-2">
-              <Form.Label className="text-white small fw-bold mb-1">
-                Enter your password to authorize deletion:
-              </Form.Label>
-              <Form.Control
-                type="password"
-                placeholder="Enter your current password"
-                value={deletePassword}
-                onChange={(e) => {
-                  setDeletePassword(e.target.value);
-                  setDeleteError('');
-                }}
-                className="bg-black text-white border-secondary"
-                autoFocus
-                required
-                disabled={deleteLoading}
-              />
-            </Form.Group>
           </Modal.Body>
           <Modal.Footer>
             <Button
-              variant="secondary"
+              variant="outline-secondary"
               size="sm"
               onClick={() => setShowDeleteModal(false)}
               disabled={deleteLoading}
@@ -366,7 +344,7 @@ function ProfilePage() {
               variant="danger"
               size="sm"
               type="submit"
-              disabled={deleteLoading || !deletePassword}
+              disabled={deleteLoading}
               id="confirm-delete-account-btn"
             >
               {deleteLoading ? 'Deleting Account...' : 'Yes, Delete My Account'}
