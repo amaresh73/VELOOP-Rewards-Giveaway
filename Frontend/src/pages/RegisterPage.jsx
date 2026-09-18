@@ -109,9 +109,8 @@ function RegisterPage() {
       const res = await sendOtp(rawPhone);
       setPhoneOtpSent(true);
       setPhoneOtpTimer(30);
-      const code = res.otp || '123456';
-      setPhoneOtpInfo(`Verification Code for ${res.phone || rawPhone}: ${code}`);
-      setPhoneOtpCode(code); // Auto-fill the code for instant verification!
+      setPhoneOtpCode(''); // Clear OTP input - user must enter the code from their phone SMS
+      setPhoneOtpInfo(res.message || `Verification code sent to ${res.phone || rawPhone}. Please check your phone SMS.`);
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to send OTP to mobile number. Please check the number and try again.';
       setError(msg);
@@ -573,13 +572,13 @@ function RegisterPage() {
                           <label className="text-white-50 small fw-bold mb-0">
                             Enter 6-Digit Mobile OTP
                           </label>
-                          <small className="text-info fw-semibold">Auto-filled (Master OTP: 123456)</small>
+                          <small className="text-white-50">Sent via SMS</small>
                         </div>
                         <InputGroup>
                           <Form.Control
                             type="text"
                             maxLength={6}
-                            placeholder="Enter 6-digit code"
+                            placeholder="Enter 6-digit SMS code"
                             value={phoneOtpCode}
                             onChange={(e) => {
                               setPhoneOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6));

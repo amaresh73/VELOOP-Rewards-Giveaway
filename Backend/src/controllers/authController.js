@@ -7,6 +7,7 @@ import GiveawayParticipation from '../models/GiveawayParticipation.js';
 import PrizeClaim from '../models/PrizeClaim.js';
 import AuditLog from '../models/AuditLog.js';
 import { sendOtpEmail, sendVerificationLinkEmail } from '../services/emailService.js';
+import { sendSmsOtp } from '../services/smsService.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'veloop-dev-secret';
 
@@ -104,11 +105,14 @@ export const sendOtp = async (req, res) => {
 
     console.log(`[VELOOP Mobile Auth] OTP for ${normalizedPhone}: ${generatedOtp} (Expires in 5m)`);
 
+    // Dispatch SMS via configured gateway (Fast2SMS, Twilio, 2Factor)
+    const smsResult = await sendSmsOtp({ phone: normalizedPhone, otp: generatedOtp });
+
     return res.json({
       success: true,
-      message: `Verification code sent to ${normalizedPhone}. (Code: ${generatedOtp})`,
+      message: `Verification code sent to ${normalizedPhone}. Please check your phone SMS messages.`,
       phone: normalizedPhone,
-      otp: generatedOtp,
+      smsDelivered: smsResult.sent,
       expiresInSeconds: 300
     });
   } catch (error) {
