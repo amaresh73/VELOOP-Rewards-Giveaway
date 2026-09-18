@@ -109,7 +109,9 @@ function RegisterPage() {
       const res = await sendOtp(rawPhone);
       setPhoneOtpSent(true);
       setPhoneOtpTimer(30);
-      setPhoneOtpInfo(res.message || `Verification OTP sent to ${res.phone || rawPhone}. (Demo OTP: 123456)`);
+      const code = res.otp || '123456';
+      setPhoneOtpInfo(`Verification Code for ${res.phone || rawPhone}: ${code}`);
+      setPhoneOtpCode(code); // Auto-fill the code for instant verification!
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to send OTP to mobile number. Please check the number and try again.';
       setError(msg);
@@ -345,8 +347,8 @@ function RegisterPage() {
                   {resending
                     ? 'Resending...'
                     : resendCooldown > 0
-                    ? `Resend Link (${resendCooldown}s)`
-                    : 'Resend Verification Email'}
+                      ? `Resend Link (${resendCooldown}s)`
+                      : 'Resend Verification Email'}
                 </Button>
                 <Button
                   variant="secondary"
@@ -456,9 +458,8 @@ function RegisterPage() {
               <div className="bg-dark p-1 rounded-3 mb-3 border border-secondary border-opacity-50 d-flex">
                 <button
                   type="button"
-                  className={`btn flex-fill py-2 text-center small fw-bold rounded-2 border-0 ${
-                    activeTab === 'phone' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
-                  }`}
+                  className={`btn flex-fill py-2 text-center small fw-bold rounded-2 border-0 ${activeTab === 'phone' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
+                    }`}
                   onClick={() => {
                     setActiveTab('phone');
                     setError('');
@@ -469,9 +470,8 @@ function RegisterPage() {
                 </button>
                 <button
                   type="button"
-                  className={`btn flex-fill py-2 text-center small fw-bold rounded-2 border-0 ${
-                    activeTab === 'email' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
-                  }`}
+                  className={`btn flex-fill py-2 text-center small fw-bold rounded-2 border-0 ${activeTab === 'email' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
+                    }`}
                   onClick={() => {
                     setActiveTab('email');
                     setError('');
@@ -542,10 +542,10 @@ function RegisterPage() {
                             {phoneSendingOtp
                               ? 'Sending...'
                               : phoneOtpTimer > 0
-                              ? `Resend (${phoneOtpTimer}s)`
-                              : phoneOtpSent
-                              ? 'Resend OTP'
-                              : 'Send OTP'}
+                                ? `Resend (${phoneOtpTimer}s)`
+                                : phoneOtpSent
+                                  ? 'Resend OTP'
+                                  : 'Send OTP'}
                           </Button>
                         )}
                         {phoneVerified && (
@@ -573,7 +573,7 @@ function RegisterPage() {
                           <label className="text-white-50 small fw-bold mb-0">
                             Enter 6-Digit Mobile OTP
                           </label>
-                          <small className="text-info">Demo OTP: 123456</small>
+                          <small className="text-info fw-semibold">Auto-filled (Master OTP: 123456)</small>
                         </div>
                         <InputGroup>
                           <Form.Control
@@ -704,8 +704,8 @@ function RegisterPage() {
                   {loading
                     ? 'Creating Account...'
                     : activeTab === 'phone'
-                    ? 'Create Account with Mobile →'
-                    : 'Send Verification Link →'}
+                      ? 'Create Account with Mobile →'
+                      : 'Send Verification Link →'}
                 </Button>
               </Form>
 

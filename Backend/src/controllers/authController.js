@@ -106,8 +106,9 @@ export const sendOtp = async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Verification code sent to ${normalizedPhone}. Please check your SMS.`,
+      message: `Verification code sent to ${normalizedPhone}. (Code: ${generatedOtp})`,
       phone: normalizedPhone,
+      otp: generatedOtp,
       expiresInSeconds: 300
     });
   } catch (error) {
