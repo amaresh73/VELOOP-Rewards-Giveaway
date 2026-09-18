@@ -1054,15 +1054,42 @@ export const redeemPromoCode = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid or expired giveaway code.' });
     }
 
+    // Abuse prevention: prevent duplicate promo code redemption by same user
+    const alreadyRedeemed = await AuditLog.findOne({
+      userId,
+      action: 'PROMO_CODE_REDEEMED',
+      'metadata.code': cleanCode
+    }).lean();
+
+    if (alreadyRedeemed) {
+      return res.status(409).json({
+        success: false,
+        message: `You have already redeemed promo code ${cleanCode}. Each code can only be used once per account.`
+      });
+    }
+
     const updatedWallet = await Wallet.findOneAndUpdate(
       { userId },
       { $inc: { 'balances.VEs': match.amount } },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     ).lean();
 
+    await AuditLog.create({
+      entityType: 'Wallet',
+      entityId: String(userId),
+      action: 'PROMO_CODE_REDEEMED',
+      performedBy: userId,
+      userId,
+      amount: match.amount,
+      currency: 'VEs',
+      result: 'SUCCESS',
+      requestId: req.headers['x-request-id'] || `promo-${Date.now()}`,
+      metadata: { code: cleanCode, label: match.label }
+    });
+
     return res.json({
       success: true,
-      message: `Code redeemed successfully! Added ${match.amount} VEs to your account.`,
+      message: `Code ${cleanCode} redeemed successfully! Added ${match.amount} VEs to your account.`,
       bonus: match.amount,
       balances: updatedWallet.balances
     });
