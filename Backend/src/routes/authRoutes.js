@@ -17,6 +17,7 @@ import {
   requestWithdrawal,
   deliverWinningReward,
   getMyWinningRewards,
+  addMoneyUpi,
   googleAuth
 } from '../controllers/authController.js';
 import { protect } from '../middleware/authMiddleware.js';
@@ -50,5 +51,6 @@ router.post('/redeem-code', protect, rateLimiter({ max: 10, windowMs: 60_000, me
 router.post('/withdraw', protect, rateLimiter({ max: 5, windowMs: 60_000, message: 'Too many withdrawal attempts. Please wait.' }), requestWithdrawal);
 router.get('/my-winning-rewards', protect, getMyWinningRewards);
 router.post('/deliver-reward', protect, rateLimiter({ max: 10, windowMs: 60_000, message: 'Too many delivery requests. Please wait.' }), deliverWinningReward);
+router.post('/add-money-upi', protect, rateLimiter({ max: 20, windowMs: 60_000, message: 'Too many top-up requests. Please wait.' }), addMoneyUpi);
 
 export default router;

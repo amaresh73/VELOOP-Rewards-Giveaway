@@ -51,6 +51,62 @@ function ProfilePage() {
   const [withdrawSuccess, setWithdrawSuccess] = useState('');
   const [withdrawError, setWithdrawError] = useState('');
 
+  // UPI Add Money states (PhonePe, Google Pay, Paytm)
+  const [showUpiModal, setShowUpiModal] = useState(false);
+  const [topupAmount, setTopupAmount] = useState('250');
+  const [topupCurrency, setTopupCurrency] = useState('VEs');
+  const [selectedUpiApp, setSelectedUpiApp] = useState('PhonePe');
+  const [topupLoading, setTopupLoading] = useState(false);
+  const [topupSuccess, setTopupSuccess] = useState('');
+  const [topupError, setTopupError] = useState('');
+  const [copiedUpi, setCopiedUpi] = useState(false);
+
+  const merchantUpiId = 'veloop.rewards@icici';
+  const payeeName = 'VELOOP Rewards';
+  const txnNote = `Topup VELOOP Wallet ${user?.name || ''}`;
+  const upiPayString = `upi://pay?pa=${merchantUpiId}&pn=${encodeURIComponent(payeeName)}&am=${topupAmount}&cu=INR&tn=${encodeURIComponent(txnNote)}`;
+
+  const getUpiAppUrl = (app) => {
+    const base = `pa=${merchantUpiId}&pn=${encodeURIComponent(payeeName)}&am=${topupAmount}&cu=INR&tn=${encodeURIComponent(txnNote)}`;
+    if (app === 'PhonePe') return `phonepe://pay?${base}`;
+    if (app === 'Google Pay') return `tez://upi/pay?${base}`;
+    if (app === 'Paytm') return `paytmmp://pay?${base}`;
+    return `upi://pay?${base}`;
+  };
+
+  const handleConfirmUpiPayment = async () => {
+    setTopupLoading(true);
+    setTopupError('');
+    setTopupSuccess('');
+    try {
+      const res = await api.post('/auth/add-money-upi', {
+        amount: Number(topupAmount),
+        currency: topupCurrency,
+        upiApp: selectedUpiApp
+      });
+
+      if (res.data?.balances && user) {
+        const updatedUser = {
+          ...user,
+          balances: res.data.balances,
+          points: res.data.balances.VEs
+        };
+        setUser(updatedUser);
+        localStorage.setItem('veloop-user', JSON.stringify(updatedUser));
+      }
+
+      setTopupSuccess(res.data?.message || `₹${topupAmount} added successfully via ${selectedUpiApp}!`);
+      setTimeout(() => {
+        setShowUpiModal(false);
+        setTopupSuccess('');
+      }, 2000);
+    } catch (err) {
+      setTopupError(err.response?.data?.message || 'Payment verification failed. Please try again.');
+    } finally {
+      setTopupLoading(false);
+    }
+  };
+
   // Fetch winning rewards and won prizes on login
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -187,35 +243,61 @@ function ProfilePage() {
 
               <hr className="border-secondary border-opacity-25 my-3" />
 
-              {/* Wallet Balances */}
-              <h6 className="text-white-50 text-uppercase small fw-bold mb-3">Your Wallet Balances</h6>
-              <div className="d-flex flex-column gap-2">
-                <div className="d-flex justify-content-between align-items-center p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
+              <hr className="border-secondary border-opacity-25 my-3" />
+
+              {/* 1. BALANCE SECTION */}
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <h6 className="text-white-50 text-uppercase small fw-bold mb-0">Your Wallet Balances</h6>
+                <Badge bg="success" bg-opacity="20" className="text-success border border-success border-opacity-25 small px-2">
+                  Live Balance
+                </Badge>
+              </div>
+              <div className="d-flex flex-column gap-2 mb-3">
+                <div className="d-flex justify-content-between align-items-center p-2 px-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
                   <span className="text-white-50 small">💎 VEs (Veloop Entries)</span>
                   <span className="fw-bold text-white fs-6">{Number(balances.VEs || 0).toLocaleString()}</span>
                 </div>
-                <div className="d-flex justify-content-between align-items-center p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
+                <div className="d-flex justify-content-between align-items-center p-2 px-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
                   <span className="text-white-50 small">⚡ SVEs (Super VEs)</span>
                   <span className="fw-bold text-warning fs-6">{Number(balances.SVEs || 0).toLocaleString()}</span>
                 </div>
-                <div className="d-flex justify-content-between align-items-center p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
+                <div className="d-flex justify-content-between align-items-center p-2 px-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
                   <span className="text-white-50 small">🪙 Tokens</span>
                   <span className="fw-bold text-info fs-6">{Number(balances.Tokens || 0).toLocaleString()}</span>
                 </div>
               </div>
 
-              {/* Wallet Actions */}
-              <div className="d-flex gap-2 mt-3 flex-wrap">
+              {/* 2. REWARDS YOU WINNING SECTION */}
+              <div className="p-3 mb-3 rounded bg-dark bg-opacity-40 border border-warning border-opacity-30">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="fs-5">🏆</span>
+                    <strong className="text-warning small">Rewards You Winning</strong>
+                  </div>
+                  <Badge bg="warning" text="dark" className="small fw-bold">
+                    4-Day Delivery 🚚
+                  </Badge>
+                </div>
+
+                {winningRewardsData.wonPrizes && winningRewardsData.wonPrizes.length > 0 ? (
+                  <div className="d-flex flex-column gap-2 mb-2">
+                    {winningRewardsData.wonPrizes.slice(0, 2).map((prize) => (
+                      <div key={prize.id} className="p-2 rounded bg-black bg-opacity-40 border border-warning border-opacity-25 d-flex justify-content-between align-items-center small">
+                        <div className="text-truncate me-2">
+                          <span className="text-white fw-bold">{prize.prizeTitle || prize.giveawayTitle}</span>
+                        </div>
+                        <span className="badge bg-success small">Won Prize</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-white-50 small mb-2" style={{ fontSize: '0.8rem' }}>
+                    Deliver your won physical gifts & voucher cards directly to your address in 4 days.
+                  </p>
+                )}
+
                 <Button
-                  variant="outline-warning"
-                  size="sm"
-                  className="rounded-pill px-3 fw-semibold flex-fill d-flex align-items-center justify-content-center gap-1"
-                  onClick={() => setShowCodeModal(true)}
-                >
-                  <span>🎁</span> Redeem Code
-                </Button>
-                <Button
-                  className="btn-primary-custom rounded-pill px-3 fw-semibold flex-fill d-flex align-items-center justify-content-center gap-1"
+                  className="btn-primary-custom w-100 py-2 fw-semibold rounded-2 d-flex align-items-center justify-content-center gap-2"
                   size="sm"
                   onClick={() => {
                     setWithdrawSuccess('');
@@ -230,7 +312,81 @@ function ProfilePage() {
                   }}
                   id="deliver-winning-rewards-btn"
                 >
-                  <span>🎁</span> Deliver Winning Rewards
+                  <span>📦</span> Deliver Won Rewards (4 Days) →
+                </Button>
+              </div>
+
+              {/* 3. UPI FOR ADD MONEY SECTION (PhonePe, Google Pay, Paytm) */}
+              <div className="p-3 rounded bg-primary bg-opacity-10 border border-primary border-opacity-30">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="fs-5">💳</span>
+                    <strong className="text-white small">Add Money via UPI</strong>
+                  </div>
+                  <Badge bg="info" text="dark" className="small fw-bold">
+                    Instant Topup ⚡
+                  </Badge>
+                </div>
+
+                <div className="d-flex gap-1 mb-2 justify-content-between">
+                  <div
+                    className="p-1 px-2 rounded border border-secondary border-opacity-30 bg-dark bg-opacity-60 text-center flex-fill cursor-pointer"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      setSelectedUpiApp('PhonePe');
+                      setShowUpiModal(true);
+                    }}
+                    title="Pay with PhonePe"
+                  >
+                    <span className="d-block" style={{ fontSize: '1.1rem' }}>🟣</span>
+                    <span className="text-white fw-bold" style={{ fontSize: '0.72rem' }}>PhonePe</span>
+                  </div>
+                  <div
+                    className="p-1 px-2 rounded border border-secondary border-opacity-30 bg-dark bg-opacity-60 text-center flex-fill cursor-pointer"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      setSelectedUpiApp('Google Pay');
+                      setShowUpiModal(true);
+                    }}
+                    title="Pay with Google Pay"
+                  >
+                    <span className="d-block" style={{ fontSize: '1.1rem' }}>🔵</span>
+                    <span className="text-white fw-bold" style={{ fontSize: '0.72rem' }}>GPay</span>
+                  </div>
+                  <div
+                    className="p-1 px-2 rounded border border-secondary border-opacity-30 bg-dark bg-opacity-60 text-center flex-fill cursor-pointer"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      setSelectedUpiApp('Paytm');
+                      setShowUpiModal(true);
+                    }}
+                    title="Pay with Paytm"
+                  >
+                    <span className="d-block" style={{ fontSize: '1.1rem' }}>🔷</span>
+                    <span className="text-white fw-bold" style={{ fontSize: '0.72rem' }}>Paytm</span>
+                  </div>
+                  <div
+                    className="p-1 px-2 rounded border border-secondary border-opacity-30 bg-dark bg-opacity-60 text-center flex-fill cursor-pointer"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      setSelectedUpiApp('BHIM');
+                      setShowUpiModal(true);
+                    }}
+                    title="Pay with any UPI App"
+                  >
+                    <span className="d-block" style={{ fontSize: '1.1rem' }}>🇮🇳</span>
+                    <span className="text-white fw-bold" style={{ fontSize: '0.72rem' }}>UPI</span>
+                  </div>
+                </div>
+
+                <Button
+                  variant="success"
+                  className="w-100 py-2 fw-semibold rounded-2 d-flex align-items-center justify-content-center gap-2"
+                  size="sm"
+                  onClick={() => setShowUpiModal(true)}
+                  id="open-upi-topup-btn"
+                >
+                  <span>⚡</span> Add Money with UPI (PhonePe/GPay/Paytm) →
                 </Button>
               </div>
             </div>
@@ -838,6 +994,147 @@ function ProfilePage() {
               </Form>
             </>
           )}
+        </Modal.Body>
+      </Modal>
+
+      {/* Add Money via UPI Modal (PhonePe, Google Pay, Paytm, BHIM) */}
+      <Modal show={showUpiModal} onHide={() => setShowUpiModal(false)} centered size="md">
+        <Modal.Header closeButton style={{ background: 'rgba(15, 20, 36, 0.98)', borderColor: 'rgba(140, 120, 255, 0.2)' }}>
+          <Modal.Title className="d-flex align-items-center gap-2 text-white">
+            <span>💳</span> Add Money via UPI
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ background: 'rgba(15, 20, 36, 0.98)', color: '#edf2ff' }} className="p-4">
+          {topupSuccess && (
+            <Alert variant="success" className="py-2 px-3 small d-flex align-items-center gap-2 mb-3">
+              <span>✅</span>
+              <div>{topupSuccess}</div>
+            </Alert>
+          )}
+
+          {topupError && (
+            <Alert variant="danger" className="py-2 px-3 small d-flex align-items-center gap-2 mb-3">
+              <span>⚠️</span>
+              <div>{topupError}</div>
+            </Alert>
+          )}
+
+          {/* Amount Selector */}
+          <div className="mb-3">
+            <Form.Label className="text-white-50 small fw-bold mb-1">Select Amount (INR ₹)</Form.Label>
+            <div className="d-flex gap-2 mb-2">
+              {['100', '250', '500', '1000'].map((amt) => (
+                <button
+                  key={amt}
+                  type="button"
+                  className={`btn btn-sm flex-fill rounded-2 fw-bold ${
+                    topupAmount === amt ? 'btn-success text-white' : 'btn-outline-secondary text-white-50'
+                  }`}
+                  onClick={() => setTopupAmount(amt)}
+                >
+                  ₹{amt}
+                </button>
+              ))}
+            </div>
+            <Form.Control
+              type="number"
+              min="10"
+              placeholder="Enter Custom Amount (Min ₹10)"
+              value={topupAmount}
+              onChange={(e) => setTopupAmount(e.target.value)}
+              className="bg-dark text-white border-secondary fw-bold"
+            />
+          </div>
+
+          {/* Currency Credit Type */}
+          <div className="mb-3">
+            <Form.Label className="text-white-50 small fw-bold mb-1">Credit As</Form.Label>
+            <Form.Select
+              value={topupCurrency}
+              onChange={(e) => setTopupCurrency(e.target.value)}
+              className="bg-dark text-white border-secondary"
+            >
+              <option value="VEs">💎 VEs (Veloop Entries) — ₹1 = 1 VE</option>
+              <option value="Tokens">🪙 Tokens — ₹1 = 10 Tokens</option>
+            </Form.Select>
+          </div>
+
+          {/* Choose UPI App */}
+          <div className="mb-3">
+            <Form.Label className="text-white-50 small fw-bold mb-1">Choose UPI App to Pay</Form.Label>
+            <div className="d-flex gap-2 mb-3">
+              {[
+                { name: 'PhonePe', icon: '🟣', label: 'PhonePe' },
+                { name: 'Google Pay', icon: '🔵', label: 'GPay' },
+                { name: 'Paytm', icon: '🔷', label: 'Paytm' },
+                { name: 'BHIM', icon: '🇮🇳', label: 'BHIM / UPI' }
+              ].map((app) => (
+                <button
+                  key={app.name}
+                  type="button"
+                  className={`btn btn-sm flex-fill py-2 rounded-2 fw-bold border ${
+                    selectedUpiApp === app.name
+                      ? 'btn-primary text-white border-primary shadow'
+                      : 'border-secondary border-opacity-30 bg-dark text-white-50'
+                  }`}
+                  onClick={() => setSelectedUpiApp(app.name)}
+                >
+                  <span className="d-block mb-1">{app.icon}</span>
+                  <span style={{ fontSize: '0.75rem' }}>{app.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Deep link button (direct launch on mobile) */}
+          <div className="mb-3">
+            <a
+              href={getUpiAppUrl(selectedUpiApp)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-primary w-100 py-2 fw-bold d-flex align-items-center justify-content-center gap-2"
+              id="upi-app-intent-btn"
+            >
+              <span>🚀</span> Pay ₹{topupAmount || 0} via {selectedUpiApp} App
+            </a>
+          </div>
+
+          {/* QR Code & UPI ID for Desktop Scan */}
+          <div className="p-3 rounded bg-dark bg-opacity-60 border border-secondary border-opacity-30 text-center mb-3">
+            <span className="text-white-50 small d-block mb-2">Or Scan QR Code with PhonePe, GPay, or Paytm:</span>
+            <div className="d-inline-block p-2 bg-white rounded-3 shadow-sm mb-2">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiPayString)}`}
+                alt="Scan with UPI"
+                style={{ width: 160, height: 160 }}
+              />
+            </div>
+            <div className="d-flex align-items-center justify-content-center gap-2">
+              <code className="text-info small">{merchantUpiId}</code>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-info py-0 px-2 small"
+                onClick={() => {
+                  navigator.clipboard.writeText(merchantUpiId);
+                  setCopiedUpi(true);
+                  setTimeout(() => setCopiedUpi(false), 2000);
+                }}
+              >
+                {copiedUpi ? '✓ Copied' : 'Copy UPI ID'}
+              </button>
+            </div>
+          </div>
+
+          {/* Confirm Payment Button */}
+          <Button
+            variant="success"
+            className="w-100 py-2 fw-bold"
+            disabled={topupLoading || !topupAmount || Number(topupAmount) < 10}
+            onClick={handleConfirmUpiPayment}
+            id="confirm-upi-payment-btn"
+          >
+            {topupLoading ? 'Verifying & Crediting...' : `✓ I Have Paid ₹${topupAmount} — Credit My Balance`}
+          </Button>
         </Modal.Body>
       </Modal>
     </div>

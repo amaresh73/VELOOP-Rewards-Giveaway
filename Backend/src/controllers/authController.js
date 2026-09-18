@@ -1353,6 +1353,70 @@ export const deliverWinningReward = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/auth/add-money-upi
+ * Adds money / tokens to wallet via UPI (PhonePe, Google Pay, Paytm, BHIM).
+ */
+export const addMoneyUpi = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized. Please log in.' });
+    }
+
+    const { amount, currency = 'VEs', upiApp = 'UPI', utrNumber } = req.body;
+    const numAmount = Number(amount);
+
+    if (!numAmount || numAmount < 10) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid top-up amount (minimum ₹10).' });
+    }
+
+    const txnId = `TXN-UPI-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // Conversion rate: 1 INR = 1 VEs or 10 Tokens
+    const creditAmount = currency === 'Tokens' ? numAmount * 10 : numAmount;
+
+    // Atomically increment wallet balance
+    const updatedWallet = await Wallet.findOneAndUpdate(
+      { userId },
+      { $inc: { [`balances.${currency}`]: creditAmount } },
+      { new: true, upsert: true }
+    );
+
+    // Record in AuditLog
+    await AuditLog.create({
+      entityType: 'Wallet',
+      entityId: String(updatedWallet._id || userId),
+      action: 'UPI_TOPUP_SUCCESS',
+      performedBy: userId,
+      userId,
+      amount: creditAmount,
+      currency,
+      result: 'SUCCESS',
+      requestId: req.headers['x-request-id'] || `upi-${Date.now()}`,
+      metadata: {
+        inrAmount: numAmount,
+        creditAmount,
+        currency,
+        upiApp,
+        utrNumber: utrNumber || txnId,
+        txnId
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: `₹${numAmount} added successfully via ${upiApp}! Credited ${creditAmount.toLocaleString()} ${currency} to your wallet.`,
+      txnId,
+      creditedAmount: creditAmount,
+      currency,
+      balances: updatedWallet.balances
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const requestWithdrawal = async (req, res) => {
   try {
     const userId = req.user?.id || req.user?._id;
