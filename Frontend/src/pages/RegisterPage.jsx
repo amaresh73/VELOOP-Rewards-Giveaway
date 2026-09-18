@@ -391,12 +391,12 @@ function RegisterPage() {
                 {/* Field 3: Mobile Phone Number (No OTP Required) */}
                 <Form.Group className="mb-3" controlId="register-phone">
                   <Form.Label className="text-white-50 small fw-bold mb-1">
-                    Mobile Phone Number <span className="text-white-50 fw-normal">(Optional)</span>
+                    Mobile Phone Number
                   </Form.Label>
                   <Form.Control
                     type="tel"
                     name="phone"
-                    placeholder="e.g. +91 90007 30843 or 9000730843"
+                    placeholder="e.g. +91 90007 88888"
                     value={formData.phone}
                     onChange={handleChange}
                     className="bg-dark text-white border-secondary"

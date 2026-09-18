@@ -132,4 +132,23 @@ router.get('/winners', async (req, res) => {
   }
 });
 
+// POST /api/admin/reset-database — clears test data and restores fresh demo state
+router.post('/reset-database', async (req, res) => {
+  try {
+    const User = (await import('../models/User.js')).default;
+    const Wallet = (await import('../models/Wallet.js')).default;
+    await Promise.all([
+      GiveawayParticipation.deleteMany({}),
+      PrizeClaim.deleteMany({}),
+      GiveawayWinner.deleteMany({}),
+      FraudEvent.deleteMany({}),
+      User.deleteMany({ email: { $nin: ['test@example.com', 'admin@example.com'] } }),
+      Wallet.deleteMany({ userId: { $nin: ['demo-user-1', 'demo-admin-1'] } })
+    ]);
+    return res.json({ success: true, message: 'Database reset successfully. Test data removed.' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 export default router;
