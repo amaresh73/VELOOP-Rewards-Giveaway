@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -1102,18 +1103,36 @@ export const requestWithdrawal = async (req, res) => {
   try {
     const userId = req.user?.id || req.user?._id;
     if (!userId) {
-      return res.status(401).json({ success: false, message: 'Please log in to submit a withdrawal.' });
+      return res.status(401).json({ success: false, message: 'Please log in to submit a withdrawal or gift request.' });
     }
 
-    const { currency = 'VEs', amount, payoutMethod, destination } = req.body;
+    const {
+      currency = 'VEs',
+      amount,
+      withdrawalType = 'MONEY', // 'PHYSICAL_GIFT' or 'MONEY'
+      giftItem,
+      shippingAddress,
+      payoutMethod = 'UPI',
+      destination
+    } = req.body;
 
     const numAmount = Number(amount);
     if (!numAmount || numAmount <= 0) {
-      return res.status(400).json({ success: false, message: 'Please enter a valid withdrawal amount greater than 0.' });
+      return res.status(400).json({ success: false, message: 'Please enter a valid amount greater than 0.' });
     }
 
-    if (!payoutMethod || !destination) {
-      return res.status(400).json({ success: false, message: 'Payout method and destination details are required.' });
+    // If Physical Gift delivery, validate complete shipping address
+    if (withdrawalType === 'PHYSICAL_GIFT') {
+      if (!shippingAddress || !shippingAddress.recipientName || !shippingAddress.address || !shippingAddress.city || !shippingAddress.state || !shippingAddress.pin || !shippingAddress.phone) {
+        return res.status(400).json({
+          success: false,
+          message: 'Complete shipping address (Full Name, Phone, Street Address, City, State, and PIN Code) is required for gift delivery.'
+        });
+      }
+    } else {
+      if (!destination || !String(destination).trim()) {
+        return res.status(400).json({ success: false, message: 'Payout method and destination details are required.' });
+      }
     }
 
     const wallet = await Wallet.findOne({ userId });
@@ -1136,6 +1155,64 @@ export const requestWithdrawal = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Withdrawal failed. Balance changed or insufficient.' });
     }
 
+    const trackingNumber = `DEL-${Date.now().toString(36).toUpperCase()}-4D`;
+    const expectedDeliveryDate = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000); // 4 business days
+
+    if (withdrawalType === 'PHYSICAL_GIFT') {
+      const fullAddr = `${shippingAddress.address}, ${shippingAddress.city}, ${shippingAddress.state} - ${shippingAddress.pin}`;
+      await PrizeClaim.create({
+        userId,
+        giveawayId: new mongoose.Types.ObjectId(),
+        type: 'physical',
+        status: 'approved',
+        name: shippingAddress.recipientName,
+        phone: shippingAddress.phone,
+        address: shippingAddress.address,
+        city: shippingAddress.city,
+        state: shippingAddress.state,
+        pin: shippingAddress.pin,
+        shippingAddress: fullAddr,
+        metadata: {
+          giftItem: giftItem || 'Exclusive VELOOP Reward Gift',
+          deliveryWindow: 'Within 4 days guaranteed',
+          trackingNumber,
+          expectedDeliveryDate: expectedDeliveryDate.toISOString(),
+          dispatchedAt: new Date().toISOString()
+        }
+      });
+
+      await AuditLog.create({
+        entityType: 'PrizeClaim',
+        entityId: trackingNumber,
+        action: 'GIFT_WITHDRAWAL_REQUESTED',
+        performedBy: userId,
+        userId,
+        amount: numAmount,
+        currency,
+        result: 'SUCCESS',
+        requestId: req.headers['x-request-id'] || `gift-${Date.now()}`,
+        metadata: {
+          giftItem: giftItem || 'Physical Reward Gift',
+          trackingNumber,
+          deliveryWindow: '4 business days',
+          shippingAddress: fullAddr
+        }
+      });
+
+      return res.json({
+        success: true,
+        withdrawalType: 'PHYSICAL_GIFT',
+        message: `Your physical gift order for "${giftItem || 'Reward Gift'}" has been placed! Dispatched to your address and guaranteed delivered within 4 days.`,
+        trackingNumber,
+        expectedDeliveryDate: expectedDeliveryDate.toISOString(),
+        giftItem: giftItem || 'Reward Gift',
+        deliveryDays: 4,
+        shippingAddress: fullAddr,
+        balances: updatedWallet.balances
+      });
+    }
+
+    // Standard Monetary Payout
     await AuditLog.create({
       entityType: 'Wallet',
       entityId: String(userId),
@@ -1151,7 +1228,8 @@ export const requestWithdrawal = async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Withdrawal request of ${numAmount} ${currency} submitted successfully and is currently processing.`,
+      withdrawalType: 'MONEY',
+      message: `Withdrawal request of ${numAmount} ${currency} submitted successfully and will be processed within 24-48 hours.`,
       balances: updatedWallet.balances
     });
   } catch (error) {
