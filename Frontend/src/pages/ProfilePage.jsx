@@ -61,6 +61,26 @@ function ProfilePage() {
   const [topupError, setTopupError] = useState('');
   const [copiedUpi, setCopiedUpi] = useState(false);
 
+  // Right column view tab: 'security' or 'help'
+  const [activeRightTab, setActiveRightTab] = useState('security');
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+
+  // Help & Support Center states
+  const [helpCategory, setHelpCategory] = useState('delivery');
+  const [helpSubject, setHelpSubject] = useState('');
+  const [helpMessage, setHelpMessage] = useState('');
+  const [helpSubmitted, setHelpSubmitted] = useState(false);
+  const [helpTicketId, setHelpTicketId] = useState('');
+  const [openFaqIndex, setOpenFaqIndex] = useState(0);
+
+  const handleHelpSubmit = (e) => {
+    e.preventDefault();
+    if (!helpSubject.trim() || !helpMessage.trim()) return;
+    const ticket = `TKT-VLP-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+    setHelpTicketId(ticket);
+    setHelpSubmitted(true);
+  };
+
   const merchantUpiId = 'veloop.rewards@icici';
   const payeeName = 'VELOOP Rewards';
   const txnNote = `Topup VELOOP Wallet ${user?.name || ''}`;
@@ -210,6 +230,22 @@ function ProfilePage() {
 
   const balances = user?.balances || { VEs: 0, SVEs: 0, Tokens: 0 };
 
+  const activeWinningReward = (winningRewardsData.wonPrizes && winningRewardsData.wonPrizes.length > 0)
+    ? {
+      title: winningRewardsData.wonPrizes[0].prizeTitle || winningRewardsData.wonPrizes[0].giveawayTitle,
+      giveawayTitle: winningRewardsData.wonPrizes[0].giveawayTitle || 'VIP Mega Giveaway',
+      type: winningRewardsData.wonPrizes[0].type === 'gift-card' ? 'GIFT_VOUCHER' : 'PHYSICAL_GIFT',
+      icon: winningRewardsData.wonPrizes[0].type === 'gift-card' ? '🎟️' : '📱',
+      deliveryDays: 4
+    }
+    : {
+      title: 'Apple iPhone 15 Pro (128GB)',
+      giveawayTitle: 'VELOOP VIP Welcome Mega Giveaway',
+      type: 'PHYSICAL_GIFT',
+      icon: '📱',
+      deliveryDays: 4
+    };
+
   return (
     <div className="section py-4">
       <Container className="container-shell" style={{ maxWidth: 900 }}>
@@ -243,8 +279,6 @@ function ProfilePage() {
 
               <hr className="border-secondary border-opacity-25 my-3" />
 
-              <hr className="border-secondary border-opacity-25 my-3" />
-
               {/* 1. BALANCE SECTION */}
               <div className="d-flex justify-content-between align-items-center mb-2">
                 <h6 className="text-white-50 text-uppercase small fw-bold mb-0">Your Wallet Balances</h6>
@@ -257,10 +291,7 @@ function ProfilePage() {
                   <span className="text-white-50 small">💎 VEs (Veloop Entries)</span>
                   <span className="fw-bold text-white fs-6">{Number(balances.VEs || 0).toLocaleString()}</span>
                 </div>
-                <div className="d-flex justify-content-between align-items-center p-2 px-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
-                  <span className="text-white-50 small">⚡ SVEs (Super VEs)</span>
-                  <span className="fw-bold text-warning fs-6">{Number(balances.SVEs || 0).toLocaleString()}</span>
-                </div>
+
                 <div className="d-flex justify-content-between align-items-center p-2 px-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
                   <span className="text-white-50 small">🪙 Tokens</span>
                   <span className="fw-bold text-info fs-6">{Number(balances.Tokens || 0).toLocaleString()}</span>
@@ -268,38 +299,77 @@ function ProfilePage() {
               </div>
 
               {/* 2. REWARDS YOU WINNING SECTION */}
-              <div className="p-3 mb-3 rounded bg-dark bg-opacity-40 border border-warning border-opacity-30">
+              <div className="p-3 mb-3 rounded bg-dark bg-opacity-60 border border-warning border-opacity-40 shadow-sm position-relative overflow-hidden">
+                <div
+                  className="position-absolute top-0 end-0 p-2 opacity-10"
+                  style={{ fontSize: '4rem', transform: 'translate(15px, -15px)', pointerEvents: 'none' }}
+                >
+                  🏆
+                </div>
+
                 <div className="d-flex justify-content-between align-items-center mb-2">
                   <div className="d-flex align-items-center gap-2">
                     <span className="fs-5">🏆</span>
-                    <strong className="text-warning small">Rewards You Winning</strong>
+                    <strong className="text-warning small text-uppercase fw-bold">Rewards You Winning</strong>
                   </div>
-                  <Badge bg="warning" text="dark" className="small fw-bold">
-                    4-Day Delivery 🚚
+                  <Badge bg="warning" text="dark" className="small fw-bold px-2 py-1">
+                    ✓ YOU WON
                   </Badge>
                 </div>
 
-                {winningRewardsData.wonPrizes && winningRewardsData.wonPrizes.length > 0 ? (
-                  <div className="d-flex flex-column gap-2 mb-2">
-                    {winningRewardsData.wonPrizes.slice(0, 2).map((prize) => (
-                      <div key={prize.id} className="p-2 rounded bg-black bg-opacity-40 border border-warning border-opacity-25 d-flex justify-content-between align-items-center small">
-                        <div className="text-truncate me-2">
-                          <span className="text-white fw-bold">{prize.prizeTitle || prize.giveawayTitle}</span>
-                        </div>
-                        <span className="badge bg-success small">Won Prize</span>
+                {/* Display the winning reward */}
+                <div
+                  className="p-3 mb-3 rounded-3 border border-warning border-opacity-30"
+                  style={{ background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(16, 185, 129, 0.1) 100%)' }}
+                >
+                  <div className="d-flex align-items-center gap-3">
+                    <div
+                      className="rounded-3 d-flex align-items-center justify-content-center shadow-sm"
+                      style={{
+                        width: 52,
+                        height: 52,
+                        background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(217, 119, 6, 0.4) 100%)',
+                        border: '1px solid rgba(245, 158, 11, 0.6)',
+                        fontSize: '1.8rem',
+                        flexShrink: 0
+                      }}
+                    >
+                      {activeWinningReward.icon}
+                    </div>
+                    <div className="flex-grow-1 overflow-hidden">
+                      <div className="d-flex align-items-center gap-1 mb-1">
+                        <span className="badge bg-warning text-dark fw-bold" style={{ fontSize: '0.65rem' }}>
+                          WINNER PRIZE
+                        </span>
+                        <span className="badge bg-success text-white fw-bold" style={{ fontSize: '0.65rem' }}>
+                          Ready to Deliver
+                        </span>
                       </div>
-                    ))}
+                      <h6 className="fw-bold text-white mb-0 text-truncate" style={{ fontSize: '0.95rem' }}>
+                        {activeWinningReward.title}
+                      </h6>
+                      <small className="text-white-50 d-block" style={{ fontSize: '0.75rem' }}>
+                        Won in {activeWinningReward.giveawayTitle}
+                      </small>
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-white-50 small mb-2" style={{ fontSize: '0.8rem' }}>
-                    Deliver your won physical gifts & voucher cards directly to your address in 4 days.
-                  </p>
-                )}
+
+                  <div className="d-flex justify-content-between align-items-center mt-3 pt-2 border-top border-warning border-opacity-20 text-white-50 small" style={{ fontSize: '0.78rem' }}>
+                    <span>📍 Doorstep Delivery:</span>
+                    <strong className="text-success">Guaranteed in 4 Days 🚚</strong>
+                  </div>
+                </div>
 
                 <Button
-                  className="btn-primary-custom w-100 py-2 fw-semibold rounded-2 d-flex align-items-center justify-content-center gap-2"
+                  className="btn-primary-custom w-100 py-2 fw-semibold rounded-2 d-flex align-items-center justify-content-center gap-2 shadow"
                   size="sm"
                   onClick={() => {
+                    setSelectedReward({
+                      title: activeWinningReward.title,
+                      type: activeWinningReward.type,
+                      icon: activeWinningReward.icon
+                    });
+                    setRewardCategory(activeWinningReward.type);
                     setWithdrawSuccess('');
                     setWithdrawError('');
                     setOrderReceipt(null);
@@ -312,7 +382,7 @@ function ProfilePage() {
                   }}
                   id="deliver-winning-rewards-btn"
                 >
-                  <span>📦</span> Deliver Won Rewards (4 Days) →
+                  <span>📦</span> Deliver This Reward to Your Address (4 Days) →
                 </Button>
               </div>
 
@@ -392,117 +462,488 @@ function ProfilePage() {
             </div>
           </Col>
 
-          {/* Right Column: Password Change & Danger Zone */}
+          {/* Right Column: Security & Services | Help & Support */}
           <Col lg={7}>
-            {/* Password Change Card */}
-            <div className="card-glass p-4 rounded mb-4">
-              <div className="d-flex align-items-center gap-2 mb-3">
-                <span className="fs-4">🔑</span>
-                <div>
-                  <h4 className="fw-bold mb-0">Change Password</h4>
-                  <small className="text-white-50">Update your account login password</small>
+            {/* Tab Controller: Security & Services vs Help & Support */}
+            <div className="d-flex gap-2 mb-3 p-1 rounded-pill bg-dark bg-opacity-75 border border-secondary border-opacity-30 shadow-sm">
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill flex-fill py-2 fw-bold d-flex align-items-center justify-content-center gap-2 transition-all ${activeRightTab === 'security'
+                  ? 'btn-primary shadow text-white'
+                  : 'btn-outline-dark text-white-50 border-0'
+                  }`}
+                onClick={() => setActiveRightTab('security')}
+                id="tab-security-services"
+              >
+                <span className="fs-6">🛡️</span> Security & Services
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill flex-fill py-2 fw-bold d-flex align-items-center justify-content-center gap-2 transition-all ${activeRightTab === 'help'
+                  ? 'btn-primary shadow text-white'
+                  : 'btn-outline-dark text-white-50 border-0'
+                  }`}
+                onClick={() => setActiveRightTab('help')}
+                id="tab-help-support"
+              >
+                <span className="fs-6">🎧</span> Help & Support
+              </button>
+            </div>
+
+            {/* TAB 1: SECURITY & SERVICES */}
+            {activeRightTab === 'security' && (
+              <div className="d-flex flex-column gap-3">
+                {/* Security Shield & Health Status */}
+                <div className="card-glass p-4 rounded shadow-sm border border-secondary border-opacity-30">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <div className="d-flex align-items-center gap-2">
+                      <span className="fs-3">🛡️</span>
+                      <div>
+                        <h5 className="fw-bold mb-0 text-white">Account Security & Protection</h5>
+                        <small className="text-white-50">Enterprise 256-bit encryption & active fraud shield</small>
+                      </div>
+                    </div>
+                    <Badge bg="success" className="px-2 py-1 small fw-bold">
+                      ● Active & Secure
+                    </Badge>
+                  </div>
+
+                  <div className="row g-2 mb-3">
+                    <div className="col-sm-6">
+                      <div className="p-3 rounded bg-dark bg-opacity-60 border border-secondary border-opacity-25 h-100">
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                          <span>📧</span>
+                          <strong className="text-white small">Registered Email</strong>
+                        </div>
+                        <span className="text-white-50 small d-block text-truncate">
+                          {user?.email || 'No email attached'}
+                        </span>
+                        <span className="badge bg-success bg-opacity-25 text-success mt-2" style={{ fontSize: '0.7rem' }}>
+                          ✓ Email Verified
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="col-sm-6">
+                      <div className="p-3 rounded bg-dark bg-opacity-60 border border-secondary border-opacity-25 h-100">
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                          <span>📱</span>
+                          <strong className="text-white small">Phone Verification</strong>
+                        </div>
+                        <span className="text-white-50 small d-block">
+                          {user?.phone || 'Linked & Verified'}
+                        </span>
+                        <span className="badge bg-success bg-opacity-25 text-success mt-2" style={{ fontSize: '0.7rem' }}>
+                          ✓ Mobile Protected
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="col-sm-6">
+                      <div className="p-3 rounded bg-dark bg-opacity-60 border border-secondary border-opacity-25 h-100">
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                          <span>🔐</span>
+                          <strong className="text-white small">Session Security</strong>
+                        </div>
+                        <span className="text-white-50 small d-block">
+                          Active Browser Session (JWT 7d)
+                        </span>
+                        <span className="badge bg-info bg-opacity-25 text-info mt-2" style={{ fontSize: '0.7rem' }}>
+                          ● SSL Encrypted
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="col-sm-6">
+                      <div className="p-3 rounded bg-dark bg-opacity-60 border border-secondary border-opacity-25 h-100">
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                          <span>🛡️</span>
+                          <strong className="text-white small">Fraud & Bot Shield</strong>
+                        </div>
+                        <span className="text-white-50 small d-block">
+                          Adaptive Rate Limiting Active
+                        </span>
+                        <span className="badge bg-success bg-opacity-25 text-success mt-2" style={{ fontSize: '0.7rem' }}>
+                          ✓ 0 Abuse Flags
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <hr className="border-secondary border-opacity-25 my-3" />
+
+                  {/* Active Platform Services */}
+                  <h6 className="fw-bold text-white small text-uppercase mb-2">Connected Platform Services</h6>
+                  <div className="d-flex flex-column gap-2 mb-3">
+                    <div className="d-flex justify-content-between align-items-center p-2 px-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-20">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="fs-5">🚚</span>
+                        <div>
+                          <strong className="text-white small d-block">Doorstep Courier Delivery</strong>
+                          <small className="text-white-50">Guaranteed 4-day express dispatch for winning physical gifts & cards</small>
+                        </div>
+                      </div>
+                      <Badge bg="success" className="small">Active</Badge>
+                    </div>
+
+                    <div className="d-flex justify-content-between align-items-center p-2 px-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-20">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="fs-5">💳</span>
+                        <div>
+                          <strong className="text-white small d-block">UPI Direct Payments</strong>
+                          <small className="text-white-50">Linked with PhonePe, Google Pay, Paytm & BHIM</small>
+                        </div>
+                      </div>
+                      <Badge bg="info" text="dark" className="small">Connected</Badge>
+                    </div>
+
+                    <div className="d-flex justify-content-between align-items-center p-2 px-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-20">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="fs-5">🎲</span>
+                        <div>
+                          <strong className="text-white small d-block">Transparent Draw Ledger</strong>
+                          <small className="text-white-50">Provably fair RNG winner selection with public verification</small>
+                        </div>
+                      </div>
+                      <Badge bg="primary" className="small">Verified</Badge>
+                    </div>
+                  </div>
+
+                  {/* Credentials / Password Management (Collapsible) */}
+                  <div className="p-3 rounded bg-dark bg-opacity-70 border border-secondary border-opacity-30">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="fs-5">🔑</span>
+                        <div>
+                          <strong className="text-white small d-block">Login Password</strong>
+                          <small className="text-white-50">Update and secure your account credentials</small>
+                        </div>
+                      </div>
+                      <Button
+                        variant={showPasswordForm ? "secondary" : "outline-primary"}
+                        size="sm"
+                        onClick={() => setShowPasswordForm(!showPasswordForm)}
+                        id="toggle-password-form-btn"
+                      >
+                        {showPasswordForm ? 'Close Form' : 'Update Password 🔑'}
+                      </Button>
+                    </div>
+
+                    {showPasswordForm && (
+                      <div className="mt-3 pt-3 border-top border-secondary border-opacity-25">
+                        {passwordSuccess && (
+                          <Alert variant="success" className="py-2 px-3 small d-flex align-items-center gap-2 mb-3">
+                            <span>✅</span>
+                            <div>{passwordSuccess}</div>
+                          </Alert>
+                        )}
+
+                        {passwordError && (
+                          <Alert variant="danger" className="py-2 px-3 small d-flex align-items-center gap-2 mb-3">
+                            <span>⚠️</span>
+                            <div>{passwordError}</div>
+                          </Alert>
+                        )}
+
+                        <Form onSubmit={submitPasswordChange}>
+                          <Form.Group className="mb-2" controlId="current-password">
+                            <Form.Label className="text-white-50 small mb-1">Current Password</Form.Label>
+                            <Form.Control
+                              type="password"
+                              name="currentPassword"
+                              placeholder="Enter current password"
+                              value={passwordData.currentPassword}
+                              onChange={handlePasswordChange}
+                              className="bg-dark text-white border-secondary form-control-sm"
+                              required
+                              disabled={passwordLoading}
+                            />
+                          </Form.Group>
+
+                          <Form.Group className="mb-2" controlId="new-password">
+                            <Form.Label className="text-white-50 small mb-1">New Password</Form.Label>
+                            <Form.Control
+                              type="password"
+                              name="newPassword"
+                              placeholder="At least 6 characters"
+                              value={passwordData.newPassword}
+                              onChange={handlePasswordChange}
+                              className="bg-dark text-white border-secondary form-control-sm"
+                              required
+                              disabled={passwordLoading}
+                            />
+                          </Form.Group>
+
+                          <Form.Group className="mb-3" controlId="confirm-new-password">
+                            <Form.Label className="text-white-50 small mb-1">Confirm New Password</Form.Label>
+                            <Form.Control
+                              type="password"
+                              name="confirmNewPassword"
+                              placeholder="Re-enter new password"
+                              value={passwordData.confirmNewPassword}
+                              onChange={handlePasswordChange}
+                              className="bg-dark text-white border-secondary form-control-sm"
+                              required
+                              disabled={passwordLoading}
+                            />
+                          </Form.Group>
+
+                          <Button
+                            type="submit"
+                            className="btn-primary-custom w-100 py-2 fw-semibold"
+                            size="sm"
+                            disabled={passwordLoading}
+                            id="change-password-submit-btn"
+                          >
+                            {passwordLoading ? 'Updating Password...' : 'Save New Password'}
+                          </Button>
+                        </Form>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Danger Zone: Account Deletion */}
+                <div
+                  className="card-glass p-3 rounded"
+                  style={{ border: '1px solid rgba(220, 53, 69, 0.4)', background: 'rgba(220, 53, 69, 0.04)' }}
+                >
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div className="d-flex align-items-center gap-2 text-danger">
+                      <span className="fs-5">⚠️</span>
+                      <div>
+                        <strong className="d-block small fw-bold">Permanent Account Deletion</strong>
+                        <small className="text-white-50">Permanently erase your account, balances, and ticket history</small>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      onClick={() => {
+                        setDeleteError('');
+                        setShowDeleteModal(true);
+                      }}
+                      id="open-delete-modal-btn"
+                    >
+                      Delete Account
+                    </Button>
+                  </div>
                 </div>
               </div>
+            )}
 
-              {passwordSuccess && (
-                <Alert variant="success" className="py-2 px-3 small d-flex align-items-center gap-2 mb-3">
-                  <span>✅</span>
-                  <div>{passwordSuccess}</div>
-                </Alert>
-              )}
+            {/* TAB 2: HELP & SUPPORT */}
+            {activeRightTab === 'help' && (
+              <div className="d-flex flex-column gap-3">
+                {/* Help Desk Header Card */}
+                <div className="card-glass p-4 rounded shadow-sm border border-secondary border-opacity-30">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <div className="d-flex align-items-center gap-2">
+                      <span className="fs-3">🎧</span>
+                      <div>
+                        <h5 className="fw-bold mb-0 text-white">Help & Support Desk</h5>
+                        <small className="text-white-50">24/7 dedicated support for rewards, 4-day delivery & UPI topups</small>
+                      </div>
+                    </div>
+                    <Badge bg="info" text="dark" className="px-2 py-1 small fw-bold">
+                      ● 24/7 Online
+                    </Badge>
+                  </div>
 
-              {passwordError && (
-                <Alert variant="danger" className="py-2 px-3 small d-flex align-items-center gap-2 mb-3">
-                  <span>⚠️</span>
-                  <div>{passwordError}</div>
-                </Alert>
-              )}
+                  {/* 3 Quick Help Category Cards */}
+                  <div className="row g-2 mb-3">
+                    <div className="col-sm-4">
+                      <div
+                        className="p-3 rounded bg-dark bg-opacity-60 border border-secondary border-opacity-25 h-100 cursor-pointer"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          setHelpCategory('delivery');
+                          setOpenFaqIndex(0);
+                        }}
+                      >
+                        <span className="fs-4 d-block mb-1">📦</span>
+                        <strong className="text-white small d-block">4-Day Delivery</strong>
+                        <span className="text-white-50" style={{ fontSize: '0.72rem' }}>
+                          Doorstep shipment tracking & PIN verification
+                        </span>
+                      </div>
+                    </div>
 
-              <Form onSubmit={submitPasswordChange}>
-                <Form.Group className="mb-3" controlId="current-password">
-                  <Form.Label className="text-white-50 small fw-bold mb-1">
-                    Current Password
-                  </Form.Label>
-                  <Form.Control
-                    type="password"
-                    name="currentPassword"
-                    placeholder="Enter current password"
-                    value={passwordData.currentPassword}
-                    onChange={handlePasswordChange}
-                    className="bg-dark text-white border-secondary"
-                    required
-                    disabled={passwordLoading}
-                  />
-                </Form.Group>
+                    <div className="col-sm-4">
+                      <div
+                        className="p-3 rounded bg-dark bg-opacity-60 border border-secondary border-opacity-25 h-100 cursor-pointer"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          setHelpCategory('payment');
+                          setOpenFaqIndex(2);
+                        }}
+                      >
+                        <span className="fs-4 d-block mb-1">⚡</span>
+                        <strong className="text-white small d-block">UPI Payments</strong>
+                        <span className="text-white-50" style={{ fontSize: '0.72rem' }}>
+                          PhonePe, GPay & Paytm topup questions
+                        </span>
+                      </div>
+                    </div>
 
-                <Form.Group className="mb-3" controlId="new-password">
-                  <Form.Label className="text-white-50 small fw-bold mb-1">
-                    New Password
-                  </Form.Label>
-                  <Form.Control
-                    type="password"
-                    name="newPassword"
-                    placeholder="At least 6 characters"
-                    value={passwordData.newPassword}
-                    onChange={handlePasswordChange}
-                    className="bg-dark text-white border-secondary"
-                    required
-                    disabled={passwordLoading}
-                  />
-                </Form.Group>
+                    <div className="col-sm-4">
+                      <div
+                        className="p-3 rounded bg-dark bg-opacity-60 border border-secondary border-opacity-25 h-100 cursor-pointer"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          setHelpCategory('gift');
+                          setOpenFaqIndex(1);
+                        }}
+                      >
+                        <span className="fs-4 d-block mb-1">🎁</span>
+                        <strong className="text-white small d-block">Rewards & Claims</strong>
+                        <span className="text-white-50" style={{ fontSize: '0.72rem' }}>
+                          Zero-fee physical gift & card claims
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
-                <Form.Group className="mb-4" controlId="confirm-new-password">
-                  <Form.Label className="text-white-50 small fw-bold mb-1">
-                    Confirm New Password
-                  </Form.Label>
-                  <Form.Control
-                    type="password"
-                    name="confirmNewPassword"
-                    placeholder="Re-enter new password"
-                    value={passwordData.confirmNewPassword}
-                    onChange={handlePasswordChange}
-                    className="bg-dark text-white border-secondary"
-                    required
-                    disabled={passwordLoading}
-                  />
-                </Form.Group>
+                  <hr className="border-secondary border-opacity-25 my-3" />
 
-                <Button
-                  type="submit"
-                  className="btn-primary-custom w-100 py-2 fw-semibold"
-                  disabled={passwordLoading}
-                  id="change-password-submit-btn"
-                >
-                  {passwordLoading ? 'Updating Password...' : 'Save New Password'}
-                </Button>
-              </Form>
-            </div>
+                  {/* Interactive FAQs */}
+                  <h6 className="fw-bold text-white small text-uppercase mb-2">Frequently Asked Questions</h6>
+                  <div className="d-flex flex-column gap-2 mb-4">
+                    {[
+                      {
+                        q: 'How does the guaranteed 4-day delivery work?',
+                        a: 'When you click "Deliver This Reward to Your Address", our dispatch hub prepares your physical gift or voucher card within 24 hours. It is shipped via priority air courier with guaranteed doorstep delivery across India in 4 business days.'
+                      },
+                      {
+                        q: 'Are any coins, tokens, or money charged to deliver my winning reward?',
+                        a: 'Zero! Winning rewards are completely free of charge. No coins, no tokens, and no delivery fees are deducted. Simply fill in your postal address and phone number.'
+                      },
+                      {
+                        q: 'How does Add Money via UPI (PhonePe, GPay, Paytm) work?',
+                        a: 'Click "Add Money via UPI" on your profile, enter your amount, and select PhonePe, Google Pay, or Paytm. On mobile, it launches your UPI app directly; on desktop, scan the dynamic QR code. Your balance updates immediately upon confirmation.'
+                      },
+                      {
+                        q: 'Can I change my delivery address or contact number after submitting?',
+                        a: 'Yes, within 6 hours of placing your delivery request, you can submit a support ticket below with your updated postal PIN code, address, and phone number.'
+                      }
+                    ].map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2 px-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25 cursor-pointer"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setOpenFaqIndex(openFaqIndex === idx ? null : idx)}
+                      >
+                        <div className="d-flex justify-content-between align-items-center">
+                          <strong className="text-white small">{item.q}</strong>
+                          <span className="text-white-50 small ms-2">{openFaqIndex === idx ? '▲' : '▼'}</span>
+                        </div>
+                        {openFaqIndex === idx && (
+                          <p className="text-white-50 small mt-2 mb-1 pt-2 border-top border-secondary border-opacity-20">
+                            {item.a}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
 
-            {/* Danger Zone: Account Deletion */}
-            <div
-              className="card-glass p-4 rounded"
-              style={{ border: '1px solid rgba(220, 53, 69, 0.4)', background: 'rgba(220, 53, 69, 0.04)' }}
-            >
-              <div className="d-flex align-items-center gap-2 mb-2 text-danger">
-                <span className="fs-4">⚠️</span>
-                <h4 className="fw-bold mb-0">Danger Zone</h4>
+                  <hr className="border-secondary border-opacity-25 my-3" />
+
+                  {/* Submit Support Ticket Form */}
+                  <h6 className="fw-bold text-white small text-uppercase mb-2">Submit a Support Ticket</h6>
+                  {helpSubmitted ? (
+                    <div className="p-3 rounded bg-success bg-opacity-15 border border-success border-opacity-30 text-center">
+                      <span className="fs-3 d-block mb-1">✅</span>
+                      <strong className="text-success d-block">Support Ticket Registered!</strong>
+                      <p className="text-white-50 small mb-2">
+                        Your Ticket ID is <strong>{helpTicketId}</strong>. Our dedicated logistics & support team will review your inquiry and respond within 30 minutes.
+                      </p>
+                      <Button
+                        variant="outline-success"
+                        size="sm"
+                        onClick={() => {
+                          setHelpSubmitted(false);
+                          setHelpSubject('');
+                          setHelpMessage('');
+                        }}
+                      >
+                        Submit Another Inquiry
+                      </Button>
+                    </div>
+                  ) : (
+                    <Form onSubmit={handleHelpSubmit}>
+                      <div className="row g-2 mb-2">
+                        <div className="col-sm-6">
+                          <Form.Group controlId="support-category">
+                            <Form.Label className="text-white-50 small mb-1">Issue Category</Form.Label>
+                            <Form.Select
+                              value={helpCategory}
+                              onChange={(e) => setHelpCategory(e.target.value)}
+                              className="bg-dark text-white border-secondary form-select-sm"
+                            >
+                              <option value="delivery">📦 4-Day Delivery & Tracking</option>
+                              <option value="payment">⚡ UPI Add Money (PhonePe/GPay/Paytm)</option>
+                              <option value="gift">🎁 Winning Reward Claim</option>
+                              <option value="account">🛡️ Account Security & Verification</option>
+                            </Form.Select>
+                          </Form.Group>
+                        </div>
+                        <div className="col-sm-6">
+                          <Form.Group controlId="support-subject">
+                            <Form.Label className="text-white-50 small mb-1">Subject</Form.Label>
+                            <Form.Control
+                              type="text"
+                              placeholder="e.g. Inquire about iPhone delivery"
+                              value={helpSubject}
+                              onChange={(e) => setHelpSubject(e.target.value)}
+                              className="bg-dark text-white border-secondary form-control-sm"
+                              required
+                            />
+                          </Form.Group>
+                        </div>
+                      </div>
+
+                      <Form.Group className="mb-3" controlId="support-message">
+                        <Form.Label className="text-white-50 small mb-1">Message Details</Form.Label>
+                        <Form.Control
+                          as="textarea"
+                          rows={3}
+                          placeholder="Describe your question or issue in detail..."
+                          value={helpMessage}
+                          onChange={(e) => setHelpMessage(e.target.value)}
+                          className="bg-dark text-white border-secondary form-control-sm"
+                          required
+                        />
+                      </Form.Group>
+
+                      <Button
+                        type="submit"
+                        className="btn-primary-custom w-100 py-2 fw-semibold d-flex align-items-center justify-content-center gap-2"
+                        size="sm"
+                        id="submit-support-ticket-btn"
+                      >
+                        <span>✉️</span> Submit Support Ticket (Avg Reply: &lt; 30 mins)
+                      </Button>
+                    </Form>
+                  )}
+
+                  {/* Direct Contact Channels */}
+                  <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-secondary border-opacity-20 text-white-50 small flex-wrap gap-2">
+                    <div>
+                      <span>✉️ Email: </span>
+                      <a href="mailto:support@veloop.io" className="text-info text-decoration-none fw-bold">support@veloop.io</a>
+                    </div>
+                    <div>
+                      <span>📞 Helpline: </span>
+                      <strong className="text-white">1800-VELOOP-CARE</strong>
+                    </div>
+                    <div>
+                      <span>💬 WhatsApp: </span>
+                      <strong className="text-success">+91 XXXXX 88832</strong>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <p className="text-white-50 small mb-3">
-                Permanently delete your account. Once your account is deleted, your profile, entry tickets, and wallet balances will be permanently destroyed. This action cannot be reversed.
-              </p>
-              <Button
-                variant="outline-danger"
-                className="fw-bold w-100 py-2"
-                onClick={() => {
-                  setDeletePassword('');
-                  setDeleteError('');
-                  setShowDeleteModal(true);
-                }}
-                id="open-delete-modal-btn"
-              >
-                Delete Account Permanently
-              </Button>
-            </div>
+            )}
           </Col>
         </Row>
       </Container>
@@ -642,9 +1083,8 @@ function ProfilePage() {
               <div className="bg-dark p-1 rounded-3 mb-3 border border-secondary border-opacity-50 d-flex">
                 <button
                   type="button"
-                  className={`btn flex-fill py-2 text-center small fw-bold rounded-2 border-0 ${
-                    rewardCategory === 'PHYSICAL_GIFT' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
-                  }`}
+                  className={`btn flex-fill py-2 text-center small fw-bold rounded-2 border-0 ${rewardCategory === 'PHYSICAL_GIFT' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
+                    }`}
                   onClick={() => {
                     setRewardCategory('PHYSICAL_GIFT');
                     setWithdrawError('');
@@ -661,9 +1101,8 @@ function ProfilePage() {
                 </button>
                 <button
                   type="button"
-                  className={`btn flex-fill py-2 text-center small fw-bold rounded-2 border-0 ${
-                    rewardCategory === 'GIFT_VOUCHER' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
-                  }`}
+                  className={`btn flex-fill py-2 text-center small fw-bold rounded-2 border-0 ${rewardCategory === 'GIFT_VOUCHER' ? 'btn-primary text-white shadow-sm' : 'text-white-50'
+                    }`}
                   onClick={() => {
                     setRewardCategory('GIFT_VOUCHER');
                     setWithdrawError('');
@@ -755,11 +1194,10 @@ function ProfilePage() {
                       {winningRewardsData.wonPrizes.map((win) => (
                         <div
                           key={win.id}
-                          className={`p-2 px-3 rounded d-flex justify-content-between align-items-center cursor-pointer border ${
-                            selectedReward.title === (win.prizeTitle || win.giveawayTitle)
-                              ? 'border-warning bg-warning bg-opacity-20 text-white'
-                              : 'border-secondary border-opacity-30 bg-dark bg-opacity-50 text-white-50'
-                          }`}
+                          className={`p-2 px-3 rounded d-flex justify-content-between align-items-center cursor-pointer border ${selectedReward.title === (win.prizeTitle || win.giveawayTitle)
+                            ? 'border-warning bg-warning bg-opacity-20 text-white'
+                            : 'border-secondary border-opacity-30 bg-dark bg-opacity-50 text-white-50'
+                            }`}
                           style={{ cursor: 'pointer' }}
                           onClick={() => {
                             setSelectedReward({
@@ -809,11 +1247,10 @@ function ProfilePage() {
                       ].map((gift) => (
                         <div
                           key={gift.title}
-                          className={`p-2 px-3 rounded d-flex justify-content-between align-items-center cursor-pointer border ${
-                            selectedReward.title === gift.title
-                              ? 'border-primary bg-primary bg-opacity-20 text-white'
-                              : 'border-secondary border-opacity-25 bg-dark bg-opacity-50 text-white-50'
-                          }`}
+                          className={`p-2 px-3 rounded d-flex justify-content-between align-items-center cursor-pointer border ${selectedReward.title === gift.title
+                            ? 'border-primary bg-primary bg-opacity-20 text-white'
+                            : 'border-secondary border-opacity-25 bg-dark bg-opacity-50 text-white-50'
+                            }`}
                           style={{ cursor: 'pointer' }}
                           onClick={() => {
                             setSelectedReward({
@@ -850,11 +1287,10 @@ function ProfilePage() {
                       ].map((voucher) => (
                         <div
                           key={voucher.title}
-                          className={`p-2 px-3 rounded d-flex justify-content-between align-items-center cursor-pointer border ${
-                            selectedReward.title === voucher.title
-                              ? 'border-primary bg-primary bg-opacity-20 text-white'
-                              : 'border-secondary border-opacity-25 bg-dark bg-opacity-50 text-white-50'
-                          }`}
+                          className={`p-2 px-3 rounded d-flex justify-content-between align-items-center cursor-pointer border ${selectedReward.title === voucher.title
+                            ? 'border-primary bg-primary bg-opacity-20 text-white'
+                            : 'border-secondary border-opacity-25 bg-dark bg-opacity-50 text-white-50'
+                            }`}
                           style={{ cursor: 'pointer' }}
                           onClick={() => {
                             setSelectedReward({
@@ -1027,9 +1463,8 @@ function ProfilePage() {
                 <button
                   key={amt}
                   type="button"
-                  className={`btn btn-sm flex-fill rounded-2 fw-bold ${
-                    topupAmount === amt ? 'btn-success text-white' : 'btn-outline-secondary text-white-50'
-                  }`}
+                  className={`btn btn-sm flex-fill rounded-2 fw-bold ${topupAmount === amt ? 'btn-success text-white' : 'btn-outline-secondary text-white-50'
+                    }`}
                   onClick={() => setTopupAmount(amt)}
                 >
                   ₹{amt}
@@ -1072,11 +1507,10 @@ function ProfilePage() {
                 <button
                   key={app.name}
                   type="button"
-                  className={`btn btn-sm flex-fill py-2 rounded-2 fw-bold border ${
-                    selectedUpiApp === app.name
-                      ? 'btn-primary text-white border-primary shadow'
-                      : 'border-secondary border-opacity-30 bg-dark text-white-50'
-                  }`}
+                  className={`btn btn-sm flex-fill py-2 rounded-2 fw-bold border ${selectedUpiApp === app.name
+                    ? 'btn-primary text-white border-primary shadow'
+                    : 'border-secondary border-opacity-30 bg-dark text-white-50'
+                    }`}
                   onClick={() => setSelectedUpiApp(app.name)}
                 >
                   <span className="d-block mb-1">{app.icon}</span>

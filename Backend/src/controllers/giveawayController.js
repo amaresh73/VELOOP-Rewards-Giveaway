@@ -25,7 +25,7 @@ const defaultSeedData = [
     prizeCategory: 'Mobile',
     prizeType: 'PHYSICAL',
     description: 'Join this exclusive giveaway for a chance to win an iPhone 15 Pro. Complete eligible activities, earn entries, and secure your shot at the ultimate flagship smartphone.',
-    image: 'https://images.unsplash.com/photo-1695048133142-1f7f6d9af86d?auto=format&fit=crop&w=900&q=80',
+    image: '/images/iphone_15_pro.jpg',
     participants: 2300,
     entries: 21980,
     endsIn: '12d : 08h : 50m',
@@ -49,7 +49,7 @@ const defaultSeedData = [
     prizes: [
       {
         id: 'PRIZE-001', name: 'iPhone 15 Pro', position: '1st Prize',
-        image: 'https://images.unsplash.com/photo-1695048133142-1f7f6d9af86d?auto=format&fit=crop&w=900&q=80',
+        image: '/images/iphone_15_pro.jpg',
         description: 'Latest iPhone 15 Pro 128GB',
         winnerCount: 1, type: 'PHYSICAL', claimType: 'delivery', value: '₹1,29,900',
         deliveryInfo: 'Delivered by verified partner courier after claim approval.'
@@ -67,7 +67,7 @@ const defaultSeedData = [
     prizeCategory: 'Wearable',
     prizeType: 'PHYSICAL',
     description: 'Smart fitness tracking with all-day battery, ECG sensors, and OLED Always-On display. Stand a chance to win the Apple Watch Series 9.',
-    image: 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=900&q=80',
+    image: '/images/apple_watch_series_9.jpg',
     participants: 1800,
     entries: 15400,
     endsIn: '9d : 06h : 30m',
@@ -76,7 +76,7 @@ const defaultSeedData = [
     prizes: [
       {
         id: 'PRIZE-002', name: 'Apple Watch Series 9', position: '2nd Prize',
-        image: 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=900&q=80',
+        image: '/images/apple_watch_series_9.jpg',
         description: 'Latest Apple Watch Series 9 GPS + Cellular',
         winnerCount: 3, type: 'PHYSICAL', claimType: 'delivery', value: '₹46,900'
       }
@@ -93,7 +93,7 @@ const defaultSeedData = [
     prizeCategory: 'Audio',
     prizeType: 'PHYSICAL',
     description: 'Immersive active noise cancellation with USB-C MagSafe case and personalized spatial audio. Win the new AirPods Pro 2.',
-    image: 'https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?auto=format&fit=crop&w=900&q=80',
+    image: '/images/airpods_pro_2.jpg',
     participants: 3100,
     entries: 34200,
     endsIn: '7d : 09h : 20m',
@@ -102,7 +102,7 @@ const defaultSeedData = [
     prizes: [
       {
         id: 'PRIZE-003', name: 'AirPods Pro 2', position: '3rd Prize',
-        image: 'https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?auto=format&fit=crop&w=900&q=80',
+        image: '/images/airpods_pro_2.jpg',
         description: 'Active Noise Cancellation with MagSafe Case',
         winnerCount: 5, type: 'PHYSICAL', claimType: 'delivery', value: '₹24,900'
       }
@@ -118,7 +118,7 @@ const defaultSeedData = [
     prize: '₹2,000 Amazon Gift Card',
     prizeCategory: 'Gift Card',
     prizeType: 'GIFT_CARD',
-    image: 'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=900&q=80',
+    image: '/images/amazon_gift_card.jpg',
     participants: 1300,
     entries: 12500,
     endsIn: '5d : 12h : 15m',
@@ -127,7 +127,7 @@ const defaultSeedData = [
     prizes: [
       {
         id: 'PRIZE-004', name: 'Amazon Gift Card', position: 'Lucky Draw',
-        image: 'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=900&q=80',
+        image: '/images/amazon_gift_card.jpg',
         description: '₹2,000 Amazon Gift Card',
         winnerCount: 10, type: 'GIFT_CARD', claimType: 'email', value: '₹2,000'
       }
@@ -143,7 +143,7 @@ const defaultSeedData = [
     prize: '₹500 Amazon Gift Card',
     prizeCategory: 'Gift Card',
     prizeType: 'GIFT_CARD',
-    image: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=900&q=80',
+    image: '/images/amazon_gift_card.jpg',
     participants: 4200,
     entries: 28900,
     endsIn: '4d : 18h : 10m',
@@ -152,7 +152,7 @@ const defaultSeedData = [
     prizes: [
       {
         id: 'PRIZE-005', name: '₹500 Amazon Voucher', position: 'Community Drop',
-        image: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=900&q=80',
+        image: '/images/amazon_gift_card.jpg',
         description: '₹500 Amazon E-Voucher Code',
         winnerCount: 25, type: 'GIFT_CARD', claimType: 'email', value: '₹500'
       }
@@ -168,7 +168,7 @@ const defaultSeedData = [
     prize: '₹20 Reward Voucher',
     prizeCategory: 'Digital',
     prizeType: 'DIGITAL',
-    image: 'https://images.unsplash.com/photo-1512428559087-560fa5ceab42?auto=format&fit=crop&w=900&q=80',
+    image: '/images/amazon_gift_card.jpg',
     participants: 7800,
     entries: 52400,
     endsIn: '1d : 04h : 20m',
@@ -177,7 +177,7 @@ const defaultSeedData = [
     prizes: [
       {
         id: 'PRIZE-006', name: '₹20 Instant Voucher', position: 'Daily Micro-Reward',
-        image: 'https://images.unsplash.com/photo-1512428559087-560fa5ceab42?auto=format&fit=crop&w=900&q=80',
+        image: '/images/amazon_gift_card.jpg',
         description: '₹20 Digital Instant Voucher',
         winnerCount: 100, type: 'DIGITAL', claimType: 'instant', value: '₹20'
       }

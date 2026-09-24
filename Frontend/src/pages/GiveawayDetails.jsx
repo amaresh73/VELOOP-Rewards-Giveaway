@@ -18,10 +18,31 @@ const timelineSteps = [
   { num: '07', icon: '🏆', title: 'Winner claims the prize', text: 'Winner submits shipping address or verified email to claim reward.' }
 ];
 
+const PRIZE_MAP = {
+  'iphone-15-pro': { img: '/images/iphone_15_pro.jpg', fallback: '/images/ref_iphone_15_pro.png' },
+  'airpods': { img: '/images/airpods_pro_2.jpg', fallback: '/images/ref_airpods_pro_2.png' },
+  'airpods-pro-2': { img: '/images/airpods_pro_2.jpg', fallback: '/images/ref_airpods_pro_2.png' },
+  'playstation-5-bundle': { img: '/images/ps5_bundle_spotlight.jpg', fallback: '/images/ref_ps5_bundle.png' },
+  'ps5': { img: '/images/ps5_bundle_spotlight.jpg', fallback: '/images/ref_ps5_bundle.png' },
+  'amazon-2000': { img: '/images/amazon_gift_card.jpg', fallback: '/images/ref_amazon_gift_card.png' },
+  'amazon-500': { img: '/images/amazon_gift_card.jpg', fallback: '/images/ref_amazon_gift_card.png' },
+  'amazon-20': { img: '/images/amazon_gift_card.jpg', fallback: '/images/ref_amazon_gift_card.png' },
+  'apple-watch': { img: '/images/apple_watch_series_9.jpg', fallback: '/images/ref_apple_watch_s9.png' },
+  'apple-watch-series-9': { img: '/images/apple_watch_series_9.jpg', fallback: '/images/ref_apple_watch_s9.png' },
+  'samsung-galaxy-s24': { img: '/images/samsung_galaxy_s24.jpg', fallback: '/images/ref_samsung_galaxy_s24.png' },
+  's24': { img: '/images/samsung_galaxy_s24.jpg', fallback: '/images/ref_samsung_galaxy_s24.png' },
+  'macbook-air-m2': { img: '/images/macbook_air_m2.png', fallback: '/images/ps5_bundle_spotlight.jpg' },
+  'nike-gift-card': { img: '/images/nike_gift_card.png', fallback: '/images/amazon_gift_card.jpg' }
+};
+
 function GiveawayDetails() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { user, updateBalances, refreshUser } = useAuth();
+  const { user, updateBalances, refreshUser, isLoggedIn } = useAuth();
+
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace state={{ message: 'Please log in to view this giveaway.' }} />;
+  }
 
   const [giveaway, setGiveaway] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -42,8 +63,6 @@ function GiveawayDetails() {
 
   // Quick test balance simulator: 'real', 'sufficient', 'insufficient'
   const [balanceSimMode, setBalanceSimMode] = useState('real');
-
-  const isLoggedIn = Boolean(user && (user.phone || user.email));
 
   // Find giveaway matching slug, id, or slugAliases
   useEffect(() => {
@@ -290,9 +309,16 @@ function GiveawayDetails() {
             <div className="detail-hero__visual position-relative">
               <div className="detail-hero__visual-spotlight" aria-hidden="true" />
               <img
-                src={giveaway.image}
+                src={(giveaway.image && !giveaway.image.includes('unsplash.com')) ? giveaway.image : (PRIZE_MAP[giveaway.slug]?.img || '/images/iphone_15_pro.jpg')}
                 alt={giveaway.title}
+                onError={(e) => {
+                  const fallback = PRIZE_MAP[giveaway.slug]?.fallback || '/images/ps5_bundle_spotlight.jpg';
+                  if (e.currentTarget.src !== fallback) {
+                    e.currentTarget.src = fallback;
+                  }
+                }}
                 className="detail-hero__image img-fluid"
+                loading="eager"
               />
               <div className="detail-hero__floating-badge">
                 <span className="text-warning">★</span> Verified VELOOP Reward

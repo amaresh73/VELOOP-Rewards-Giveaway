@@ -11,12 +11,12 @@ import { getPreviousWinners } from '../controllers/historyController.js';
 
 const router = express.Router();
 
-router.get('/current', getCurrentGiveaway);
-router.get('/previous', getPreviousWinners);
-router.get('/previous/winners', getPreviousWinners);
-router.get('/slug/:slug', getGiveawayBySlug);
+router.get('/current', protect, getCurrentGiveaway);
+router.get('/previous', protect, getPreviousWinners);
+router.get('/previous/winners', protect, getPreviousWinners);
+router.get('/slug/:slug', protect, getGiveawayBySlug);
 router.get('/:id/my-status', protect, getMyParticipationStatus);
-router.get('/:id/winners', getGiveawayWinners);
+router.get('/:id/winners', protect, getGiveawayWinners);
 router.post('/:id/join', rateLimiter({ max: 10, windowMs: 60_000 }), protect, (req, res, next) => {
   req.body.giveawayId = req.params.id;
   return joinGiveaway(req, res, next);
@@ -26,8 +26,8 @@ router.post('/:id/claim', rateLimiter({ max: 8, windowMs: 60_000 }), protect, (r
   return createClaim(req, res, next);
 });
 router.get('/:id/my-claim', protect, getMyClaim);
-router.get('/:id', getGiveawayById);
-router.get('/', getGiveaways);
+router.get('/:id', protect, getGiveawayById);
+router.get('/', protect, getGiveaways);
 router.post('/', protect, authorize('admin'), createGiveaway);
 
 router.post('/seed', protect, authorize('admin'), async (req, res) => {

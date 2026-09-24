@@ -148,8 +148,18 @@ export default function GiveawayCodeModal({ show, onHide, onCodeRedeemed }) {
             </p>
 
             {status && (
-              <Alert variant={status.type} className="mb-3">
-                {status.message}
+              <Alert
+                variant={status.type}
+                className={`mb-3 ${status.type === 'success' ? 'code-success-burst' : 'code-shake-error'}`}
+                style={{
+                  boxShadow: status.type === 'success' ? '0 0 20px rgba(16, 185, 129, 0.4)' : '0 0 20px rgba(239, 68, 68, 0.35)',
+                  borderWidth: '1.5px'
+                }}
+              >
+                <div className="d-flex align-items-center gap-2">
+                  <span style={{ fontSize: '1.2rem' }}>{status.type === 'success' ? '🎉' : '⚠️'}</span>
+                  <span>{status.message}</span>
+                </div>
               </Alert>
             )}
 
@@ -158,10 +168,10 @@ export default function GiveawayCodeModal({ show, onHide, onCodeRedeemed }) {
                 <Form.Label className="small fw-bold text-uppercase letter-spacing-wide">Promo / Voucher Code</Form.Label>
                 <Form.Control
                   type="text"
-                  placeholder="e.g. VELOOP2026"
+                  placeholder="e.g. VELOOP2111"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  className="text-uppercase fw-bold"
+                  className={`text-uppercase fw-bold code-input-glow ${status?.type === 'danger' ? 'is-invalid code-shake-error' : ''}`}
                   style={{
                     letterSpacing: '0.1em',
                     background: 'rgba(24, 34, 58, 0.9)',
@@ -171,20 +181,27 @@ export default function GiveawayCodeModal({ show, onHide, onCodeRedeemed }) {
                   required
                 />
                 <Form.Text className="text-muted small">
-                  demo codes: <strong className="text-primary">VELOOP2026</strong>, <strong className="text-primary">SUMMERDROP</strong>
+                  demo codes: <strong className="text-primary">VELOOP2026</strong>
                 </Form.Text>
               </Form.Group>
 
               <div className="d-flex justify-content-end gap-2 mt-4">
-                <Button variant="outline-light" onClick={handleClose}>
+                <Button variant="outline-light" onClick={handleClose} className="btn-press">
                   Close
                 </Button>
                 <Button
                   type="submit"
-                  className="btn-primary-custom"
+                  className="btn-primary-custom btn-shimmer btn-press"
                   disabled={isSubmitting || !code.trim()}
                 >
-                  {isSubmitting ? 'Redeeming...' : 'Redeem Code →'}
+                  {isSubmitting ? (
+                    <span className="d-flex align-items-center gap-2">
+                      <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                      Redeeming...
+                    </span>
+                  ) : (
+                    'Redeem Code →'
+                  )}
                 </Button>
               </div>
             </Form>

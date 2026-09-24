@@ -5,7 +5,7 @@ import { authorize } from '../middleware/authorizeMiddleware.js';
 
 const router = express.Router();
 
-router.get('/', getWinners);
+router.get('/', protect, getWinners);
 router.post('/select', protect, authorize('admin'), selectWinner);
 
 export default router;

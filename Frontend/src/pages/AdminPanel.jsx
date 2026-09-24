@@ -541,11 +541,10 @@ function AdminPanel() {
                       <div className="admin-status-row">
                         <div className="d-flex align-items-center">
                           <span
-                            className={`admin-status-dot ${
-                              stats.pendingClaims > 0
-                                ? 'admin-status-dot--yellow'
-                                : 'admin-status-dot--green'
-                            }`}
+                            className={`admin-status-dot ${stats.pendingClaims > 0
+                              ? 'admin-status-dot--yellow'
+                              : 'admin-status-dot--green'
+                              }`}
                           />
                           <span>Prize Fulfilment Queue</span>
                         </div>
@@ -838,10 +837,10 @@ function AdminPanel() {
                 {giveaways.filter((g) =>
                   ['closed', 'archived', 'ended'].includes(g.status?.toLowerCase() || '')
                 ).length === 0 && (
-                  <div className="p-3 bg-white bg-opacity-5 rounded-3 w-100 text-white-50 small">
-                    ℹ️ No closed campaigns available. Go to the <strong>Giveaways</strong> tab and change a campaign's status to <strong>Closed</strong> first.
-                  </div>
-                )}
+                    <div className="p-3 bg-white bg-opacity-5 rounded-3 w-100 text-black-50 small">
+                      ℹ️ No closed campaigns available. Go to the <strong>Giveaways</strong> tab and change a campaign's status to <strong>Closed</strong> first.
+                    </div>
+                  )}
               </div>
             </div>
 
@@ -889,8 +888,8 @@ function AdminPanel() {
                               w.status === 'claimed'
                                 ? 'success'
                                 : w.status === 'expired'
-                                ? 'danger'
-                                : 'primary'
+                                  ? 'danger'
+                                  : 'primary'
                             }
                             className="badge-pill"
                           >
